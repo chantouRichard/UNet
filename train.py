@@ -16,6 +16,7 @@ from utils.dataloader import UnetDataset, unet_dataset_collate
 from utils.utils import (download_weights, seed_everything, show_config,
                          worker_init_fn)
 from utils.utils_fit import fit_one_epoch
+import matplotlib.pyplot as plt
 
 '''
 训练自己的语义分割模型一定需要注意以下几点：
@@ -37,6 +38,73 @@ from utils.utils_fit import fit_one_epoch
 3、训练好的权值文件保存在logs文件夹中，每个训练世代（Epoch）包含若干训练步长（Step），每个训练步长（Step）进行一次梯度下降。
    如果只是训练了几个Step是不会保存的，Epoch和Step的概念要捋清楚一下。
 '''
+
+
+def visualize_predictions(model, dataloader, epoch, num_samples=2, save_dir='logs/predictions/'):
+    """可视化预测结果"""
+    import os
+    os.makedirs(save_dir, exist_ok=True)
+
+    model.eval()
+    with torch.no_grad():
+        for i, data in enumerate(dataloader):
+            if i >= num_samples:
+                break
+
+            # 你的数据格式是三元组: (images, masks, extra_info)
+            images = data[0]  # 图像 tensor
+            masks = data[1]  # 掩码 tensor
+            # data[2] 是额外信息，这里不需要
+
+            # 确保数据在正确的设备上
+            if torch.cuda.is_available():
+                images = images.cuda()
+
+            # 预测（只使用前两个通道）
+            outputs = model(images)
+            preds = torch.argmax(outputs, dim=1).cpu().numpy()
+
+            # 获取单个样本
+            # 注意：图像是 [C, H, W] 格式，需要转为 [H, W, C]
+            img_np = images[0].permute(1, 2, 0).cpu().numpy()
+            mask_np = masks[0].cpu().numpy()
+            pred_np = preds[0]
+
+            # 图像可能需要反归一化
+            # 如果你的图像是归一化到[0,1]的，可以跳过
+            # 如果归一化到[-1,1]，需要转换：
+            if img_np.min() < 0:
+                img_np = (img_np + 1) / 2  # 从[-1,1]转到[0,1]
+            elif img_np.max() <= 1:
+                img_np = img_np  # 已经是[0,1]
+            else:
+                img_np = img_np.astype(np.uint8)  # 可能是0-255
+
+            # 可视化
+            fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+            # 原图
+            axes[0].imshow(img_np)
+            axes[0].set_title(f'Original Image\n{img_np.shape}')
+            axes[0].axis('off')
+
+            # 真实掩码
+            axes[1].imshow(mask_np, cmap='jet', vmin=0, vmax=num_classes - 1)
+            axes[1].set_title(f'Ground Truth\nClasses: {np.unique(mask_np)}')
+            axes[1].axis('off')
+
+            # 预测结果
+            axes[2].imshow(pred_np, cmap='jet', vmin=0, vmax=num_classes - 1)
+            axes[2].set_title(f'Prediction\nClasses: {np.unique(pred_np)}')
+            axes[2].axis('off')
+
+            plt.suptitle(f'Epoch {epoch} - Sample {i + 1}')
+            plt.tight_layout()
+            plt.savefig(f'{save_dir}epoch_{epoch}_sample_{i}.png', dpi=150, bbox_inches='tight')
+            plt.close()
+
+    model.train()
+
 if __name__ == "__main__":
     #---------------------------------#
     #   Cuda    是否使用Cuda
@@ -73,7 +141,7 @@ if __name__ == "__main__":
     #   num_classes     训练自己的数据集必须要修改的
     #                   自己需要的分类个数+1，如2+1
     #-----------------------------------------------------#
-    num_classes = 21
+    num_classes = 2
     #-----------------------------------------------------#
     #   主干网络选择
     #   vgg
@@ -109,7 +177,7 @@ if __name__ == "__main__":
     #-----------------------------------------------------#
     #   input_shape     输入图片的大小，32的倍数
     #-----------------------------------------------------#
-    input_shape = [512, 512]
+    input_shape = [1024, 1024]
     
     #----------------------------------------------------------------------------------------------------------------------------#
     #   训练分为两个阶段，分别是冻结阶段和解冻阶段。设置冻结阶段是为了满足机器性能不足的同学的训练需求。
@@ -154,7 +222,7 @@ if __name__ == "__main__":
     #                       (当Freeze_Train=False时失效)
     #------------------------------------------------------------------#
     Init_Epoch          = 0
-    Freeze_Epoch        = 50
+    Freeze_Epoch        = 20
     Freeze_batch_size   = 2
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
@@ -163,7 +231,7 @@ if __name__ == "__main__":
     #   UnFreeze_Epoch          模型总共训练的epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 100
+    UnFreeze_Epoch      = 40
     Unfreeze_batch_size = 2
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
@@ -180,7 +248,7 @@ if __name__ == "__main__":
     #                   当使用SGD优化器时建议设置   Init_lr=1e-2
     #   Min_lr          模型的最小学习率，默认为最大学习率的0.01
     #------------------------------------------------------------------#
-    Init_lr             = 1e-4
+    Init_lr             = 1e-3
     Min_lr              = Init_lr * 0.01
     #------------------------------------------------------------------#
     #   optimizer_type  使用到的优化器种类，可选的有adam、sgd
@@ -315,6 +383,7 @@ if __name__ == "__main__":
         time_str        = datetime.datetime.strftime(datetime.datetime.now(),'%Y_%m_%d_%H_%M_%S')
         log_dir         = os.path.join(save_dir, "loss_" + str(time_str))
         loss_history    = LossHistory(log_dir, model, input_shape=input_shape)
+        loss_history.miou_history = []
     else:
         loss_history    = None
         
@@ -444,6 +513,8 @@ if __name__ == "__main__":
         if local_rank == 0:
             eval_callback   = EvalCallback(model, input_shape, num_classes, val_lines, VOCdevkit_path, log_dir, Cuda, \
                                             eval_flag=eval_flag, period=eval_period)
+            # 添加mIoU记录到loss_history
+            eval_callback.loss_history = loss_history
         else:
             eval_callback   = None
         
@@ -499,6 +570,33 @@ if __name__ == "__main__":
             fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch, 
                     epoch_step, epoch_step_val, gen, gen_val, UnFreeze_Epoch, Cuda, dice_loss, focal_loss, cls_weights, num_classes, fp16, scaler, save_period, save_dir, local_rank)
 
+            # 每10个epoch可视化一次
+            # 在调用 visualize_predictions 前添加调试代码
+            if local_rank == 0 and epoch % 10 == 0:
+                visualize_predictions(model, gen_val, epoch, num_samples=2,
+                                      save_dir=os.path.join(log_dir, 'predictions/'))
+            # 添加绘图代码（只在主进程且每5个epoch绘制）
+            if local_rank == 0 and epoch % 5 == 0:
+
+                # 绘制损失曲线
+                plt.figure(figsize=(12, 4))
+
+                plt.subplot(1, 2, 1)
+                plt.plot(loss_history.losses)
+                plt.title('Training Loss')
+                plt.xlabel('Epoch')
+                plt.ylabel('Loss')
+
+                if hasattr(loss_history, 'val_loss') and loss_history.val_loss:
+                    plt.subplot(1, 2, 2)
+                    plt.plot(loss_history.val_loss)
+                    plt.title('Validation Loss')
+                    plt.xlabel('Epoch')
+                    plt.ylabel('Loss')
+
+                plt.tight_layout()
+                plt.savefig(os.path.join(log_dir, f'loss_curve_epoch_{epoch}.png'), dpi=150)
+                plt.close()
             if distributed:
                 dist.barrier()
 

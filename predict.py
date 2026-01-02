@@ -31,8 +31,9 @@ if __name__ == "__main__":
     #   count、name_classes仅在mode='predict'时有效
     #-------------------------------------------------------------------------#
     count           = False
-    name_classes    = ["background","aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+    # name_classes    = ["background","aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
     # name_classes    = ["background","cat","dog"]
+    name_classes = ["background","cable","tower","deck"]
     #----------------------------------------------------------------------------------------------------------#
     #   video_path          用于指定视频的路径，当video_path=0时表示检测摄像头
     #                       想要检测视频，则设置如video_path = "xxx.mp4"即可，代表读取出根目录下的xxx.mp4文件。
@@ -53,7 +54,7 @@ if __name__ == "__main__":
     #   test_interval和fps_image_path仅在mode='fps'有效
     #----------------------------------------------------------------------------------------------------------#
     test_interval = 100
-    fps_image_path  = "img/street.jpg"
+    fps_image_path  = "img/3_shot_outer01_inner14.jpg"
     #-------------------------------------------------------------------------#
     #   dir_origin_path     指定了用于检测的图片的文件夹路径
     #   dir_save_path       指定了检测完图片的保存路径
@@ -96,6 +97,30 @@ if __name__ == "__main__":
                 print('Open Error! Try again!')
                 continue
             else:
+                # ---------- 新增的预处理代码 ----------
+                # 1. 将图片上下用黑色扩成正方形
+                width, height = image.size
+                if width != height:
+                    # 计算需要填充的大小
+                    target_size = max(width, height)
+                    # 创建黑色背景的正方形图片
+                    square_image = Image.new('RGB', (target_size, target_size), (0, 0, 0))
+                    # 计算粘贴位置（居中）
+                    if width > height:
+                        # 宽>高，上下填充
+                        paste_y = (target_size - height) // 2
+                        square_image.paste(image, (0, paste_y))
+                    else:
+                        # 高>宽，左右填充
+                        paste_x = (target_size - width) // 2
+                        square_image.paste(image, (paste_x, 0))
+                    image = square_image
+
+                # 2. 调整大小为1024x1024
+                image = image.resize((1024, 1024), Image.LANCZOS)
+                # ---------- 预处理结束 ----------
+
+                # 调用检测函数
                 r_image = unet.detect_image(image, count=count, name_classes=name_classes)
                 r_image.show()
 
