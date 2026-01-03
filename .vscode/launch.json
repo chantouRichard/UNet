@@ -1,0 +1,40 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Train UNet",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/train.py",
+            "console": "externalTerminal",  // 改为外部终端，避免VSCode终端问题
+            "justMyCode": false,
+            "python": "${command:python.interpreterPath}",  // 使用VSCode选择的解释器
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "CUDA_VISIBLE_DEVICES": "0"  // 如果使用GPU
+            },
+            "args": [
+                "--batch-size", "2",
+                "--epochs", "1"  // 调试时只训练1个epoch
+            ]
+        },
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Python: 快速测试",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_simple.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

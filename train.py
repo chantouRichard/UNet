@@ -223,7 +223,7 @@ if __name__ == "__main__":
     #------------------------------------------------------------------#
     Init_Epoch          = 0
     Freeze_Epoch        = 20
-    Freeze_batch_size   = 2
+    Freeze_batch_size   = 1
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
     #   此时模型的主干不被冻结了，特征提取网络会发生改变
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
     UnFreeze_Epoch      = 40
-    Unfreeze_batch_size = 2
+    Unfreeze_batch_size = 1
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
@@ -469,8 +469,8 @@ if __name__ == "__main__":
         #   根据optimizer_type选择优化器
         #---------------------------------------#
         optimizer = {
-            'adam'  : optim.Adam(model.parameters(), Init_lr_fit, betas = (momentum, 0.999), weight_decay = weight_decay),
-            'sgd'   : optim.SGD(model.parameters(), Init_lr_fit, momentum = momentum, nesterov=True, weight_decay = weight_decay)
+            'adam'  : optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), Init_lr_fit, betas = (momentum, 0.999), weight_decay = weight_decay),
+            'sgd'   : optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), Init_lr_fit, momentum = momentum, nesterov=True, weight_decay = weight_decay)
         }[optimizer_type]
 
         #---------------------------------------#
@@ -521,12 +521,30 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
+        CBAM_WARMUP_EPOCHS = 5      # 前5epoch只训CBAM
+        PARTIAL_UNFREEZE_EPOCHS = 20 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 40    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, UnFreeze_Epoch):
             #---------------------------------------#
             #   如果模型有冻结学习部分
             #   则解冻，并设置参数
             #---------------------------------------#
-            if epoch >= Freeze_Epoch and not UnFreeze_flag and Freeze_Train:
+            #---------------------------------------#
+            #   阶段切换逻辑
+            #---------------------------------------#
+            if epoch == Init_Epoch:  # 第一个epoch
+                print("\n阶段1: 冻结VGG全部，只训练CBAM和解码器")
+                model.freeze_backbone()  # 冻结VGG
+                model.set_cbam_trainable(True)  # CBAM可训练
+                
+            elif epoch == CBAM_WARMUP_EPOCHS and Freeze_Train:
+                print("\n阶段2: 部分解冻VGG高层，联合训练")
+                model.set_backbone_partial_unfreeze()  # 部分解冻VGG
+                model.set_cbam_trainable(True)  # CBAM继续训练
+            elif epoch >= Freeze_Epoch and not UnFreeze_flag and Freeze_Train:
+                print("\n阶段3: 全部解冻，整体微调")
+                model.unfreeze_backbone()  # 完全解冻VGG
+                model.set_cbam_trainable(True)  # CBAM继续训练
                 batch_size = Unfreeze_batch_size
 
                 #-------------------------------------------------------------------#

@@ -92,3 +92,22 @@ class Unet(nn.Module):
         elif self.backbone == "resnet50":
             for param in self.resnet.parameters():
                 param.requires_grad = True
+
+    def set_cbam_trainable(self, trainable=True):
+        """设置CBAM模块是否可训练"""
+        for name, param in self.named_parameters():
+            if 'cbam' in name.lower() or 'attention' in name.lower():
+                param.requires_grad = trainable
+                print(f"{'训练' if trainable else '冻结'}: {name}")
+
+    def set_backbone_partial_unfreeze(self):
+        """部分解冻VGG的高层（最后几层）"""
+        if self.backbone == "vgg":
+            # VGG有31层（0-30），解冻最后8层（23-30）
+            for i, (name, param) in enumerate(self.vgg.named_parameters()):
+                # 解冻features中后8层的参数
+                if i >= 23:  # 最后8层
+                    param.requires_grad = True
+                    print(f"解冻高层: {name}")
+                else:
+                    param.requires_grad = False

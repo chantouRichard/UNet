@@ -55,6 +55,11 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
                 #-------------------------------#
                 _f_score = f_score(outputs, labels)
 
+            print(f"Loss值: {loss.item()}")
+            print(f"Loss是否有限: {torch.isfinite(loss)}")
+
+            if not torch.isfinite(loss):
+                print("⚠️ Loss不是有限数！可能是梯度爆炸")
             loss.backward()
             optimizer.step()
         else:

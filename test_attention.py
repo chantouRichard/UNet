@@ -14,7 +14,7 @@ class AttentionVisualizer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         # 加载模型
-        self.model = Unet(num_classes=2, pretrained=False, backbone='vgg').to(self.device)
+        self.model = Unet(num_classes=21, pretrained=False, backbone='vgg').to(self.device)
         
         if model_path and os.path.exists(model_path):
             print(f"加载预训练权重: {model_path}")
@@ -221,8 +221,8 @@ def test_attention_on_real_data():
 def compare_without_attention():
     """对比有无注意力机制的效果"""
     # 创建带注意力和不带注意力的模型
-    model_with_att = Unet(num_classes=2, pretrained=False, backbone='vgg')
-    model_without_att = Unet(num_classes=2, pretrained=False, backbone='vgg')
+    model_with_att = Unet(num_classes=21, pretrained=False, backbone='vgg')
+    model_without_att = Unet(num_classes=21, pretrained=False, backbone='vgg')
     
     # 加载预训练权重
     model_path = 'model_data/unet_vgg_voc.pth'
