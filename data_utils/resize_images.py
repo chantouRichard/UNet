@@ -154,14 +154,14 @@ def check_mask_format(mask_dir):
 def main():
     # 设置命令行参数
     parser = argparse.ArgumentParser(description='将图片批量缩放到指定尺寸')
-    parser.add_argument('--source_jpeg', default='VOCdevkit/VOC2007/JPEGImages',
-                        help='源JPEG图片目录，默认: VOCdevkit/VOC2007/JPEGImages')
-    parser.add_argument('--source_seg', default='VOCdevkit/VOC2007/SegmentationClass_origin',
-                        help='源分割掩码目录，默认: VOCdevkit/VOC2007/SegmentationClass')
-    parser.add_argument('--target_jpeg', default='VOCdevkit/VOC2007/JPEGImages_1024',
-                        help='目标JPEG图片目录，默认: VOCdevkit/VOC2007/JPEGImages_1024')
+    parser.add_argument('--source_jpeg', default='VOCdevkit/VOC2007-2-whole/JPEGImages',
+                        help='源JPEG图片目录，默认: VOCdevkit/VOC2007-2-whole/JPEGImages')
+    parser.add_argument('--source_seg', default='VOCdevkit/VOC2007-2-whole/SegmentationClass',
+                        help='源分割掩码目录，默认: VOCdevkit/VOC2007-2-whole/SegmentationClass')
+    parser.add_argument('--target_jpeg', default='VOCdevkit/VOC2007/JPEGImages',
+                        help='目标JPEG图片目录，默认: VOCdevkit/VOC2007/JPEGImages')
     parser.add_argument('--target_seg', default='VOCdevkit/VOC2007/SegmentationClass',
-                        help='目标分割掩码目录，默认: VOCdevkit/VOC2007/SegmentationClass_1024')
+                        help='目标分割掩码目录，默认: VOCdevkit/VOC2007/SegmentationClass')
     parser.add_argument('--size', type=int, default=1024,
                         help='目标尺寸，默认: 1024')
     parser.add_argument('--check_masks', action='store_true',
@@ -185,18 +185,18 @@ def main():
 
     # 处理JPEGImages目录（彩色图片）
     print("\n[1] 处理原图 (JPEGImages)...")
-    # if os.path.exists(args.source_jpeg):
-    #     # 对彩色图片使用高质量插值
-    #     count_jpeg = resize_images(
-    #         source_dir=args.source_jpeg,
-    #         target_dir=args.target_jpeg,
-    #         target_size=args.size,
-    #         is_mask=False,  # 彩色图片
-    #         interpolation=cv2.INTER_LANCZOS4  # 高质量插值
-    #     )
-    # else:
-    #     print(f"错误: 源目录 {args.source_jpeg} 不存在!")
-    #     return
+    if os.path.exists(args.source_jpeg):
+        # 对彩色图片使用高质量插值
+        count_jpeg = resize_images(
+            source_dir=args.source_jpeg,
+            target_dir=args.target_jpeg,
+            target_size=args.size,
+            is_mask=False,  # 彩色图片
+            interpolation=cv2.INTER_LANCZOS4  # 高质量插值
+        )
+    else:
+        print(f"错误: 源目录 {args.source_jpeg} 不存在!")
+        return
 
     # 处理SegmentationClass目录（灰度掩码）
     print("\n[2] 处理掩码图 (SegmentationClass)...")
