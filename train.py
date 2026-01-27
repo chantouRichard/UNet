@@ -222,7 +222,7 @@ if __name__ == "__main__":
     #                       (当Freeze_Train=False时失效)
     #------------------------------------------------------------------#
     Init_Epoch          = 0
-    Freeze_Epoch        = 20
+    Freeze_Epoch        = 5
     Freeze_batch_size   = 1
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     #   UnFreeze_Epoch          模型总共训练的epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 40
+    UnFreeze_Epoch      = 10
     Unfreeze_batch_size = 1
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
@@ -521,9 +521,9 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
-        CBAM_WARMUP_EPOCHS = 5      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 20 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 40    # 20-40epoch全部解冻
+        CBAM_WARMUP_EPOCHS = 2      # 前5epoch只训CBAM
+        PARTIAL_UNFREEZE_EPOCHS = 5 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 10    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, UnFreeze_Epoch):
             #---------------------------------------#
             #   如果模型有冻结学习部分
@@ -590,11 +590,11 @@ if __name__ == "__main__":
 
             # 每10个epoch可视化一次
             # 在调用 visualize_predictions 前添加调试代码
-            if local_rank == 0 and epoch % 10 == 0:
+            if local_rank == 0 and epoch % 2 == 0:
                 visualize_predictions(model, gen_val, epoch, num_samples=2,
                                       save_dir=os.path.join(log_dir, 'predictions/'))
             # 添加绘图代码（只在主进程且每5个epoch绘制）
-            if local_rank == 0 and epoch % 5 == 0:
+            if local_rank == 0 and epoch % 2 == 0:
 
                 # 绘制损失曲线
                 plt.figure(figsize=(12, 4))

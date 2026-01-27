@@ -13,29 +13,29 @@ from PIL import Image
 
 # ==================== 配置区域 ====================
 # 源数据集目录
-SOURCE_DATASET_DIR = Path("E:\\06_Temporary\\data_bridge_aug")
+SOURCE_DATASET_DIR = Path("VOCdevkit\\VOC2007-temp")
 
 # 输出数据集目录
-OUTPUT_DATASET_DIR = Path("E:\\03_Learning\\MachineLearning\\unet-pytorch\\VOCdevkit\\VOC2007-2-reshape")
+OUTPUT_DATASET_DIR = Path("VOCdevkit\\VOC2007")
 
 # 裁剪参数
-PATCH_SIZE = 512  # 裁剪尺寸（方形）
+PATCH_SIZE = 1024  # 裁剪尺寸（方形）
 OVERLAP = 0.2  # 重叠比例 (0-1之间)
 
 # 子目录名称配置
 SUBDIRS = {
     'img': 'img',
     'masks': 'masks',
-    'previews': 'previews',
-    'pure_color_masks': 'pure_color_masks'
+    # 'previews': 'previews',
+    # 'pure_color_masks': 'pure_color_masks'
 }
 
 # 扩展名映射
 EXTENSION_MAP = {
     'img': ['.jpg', '.jpeg', '.png', '.bmp', '.tiff'],
     'masks': ['.png'],
-    'previews': ['.jpg', '.png'],
-    'pure_color_masks': ['.png']
+    # 'previews': ['.jpg', '.png'],
+    # 'pure_color_masks': ['.png']
 }
 
 # 是否保留原始文件
@@ -49,14 +49,14 @@ SHOW_PROGRESS = True
 
 # 默认裁剪区域（当mask全黑或过滤后无有效patch时使用）
 # 格式: (left, top, right, bottom) - 方形区域
-DEFAULT_CROP_BOX = (448, 0, 960, 512)
+DEFAULT_CROP_BOX = (896, 0, 1920, 1024)
 
 
 # =================================================
 
 
 def generate_content_patches(image: Image.Image, mask: np.ndarray,
-                             patch_size: int = 512, overlap: float = 0.2) -> List[Tuple[Image.Image, np.ndarray]]:
+                             patch_size: int = 1024, overlap: float = 0.2) -> List[Tuple[Image.Image, np.ndarray]]:
     """
     为超宽超大内容生成多个重叠的方形patches
     仅保留包含前景像素的patch，过滤纯背景patch
@@ -354,16 +354,17 @@ def process_dataset():
                 total_patches_created += len(saved_files) // 2
 
             # 处理第二对: previews 和 pure_color_masks
-            if 'previews' in file_group and 'pure_color_masks' in file_group:
-                saved_files = process_file_pair(
-                    file_group['previews'], file_group['pure_color_masks'],
-                    base_idx, 0, 'previews'
-                )
-                total_patches_created += len(saved_files) // 2
+            # if 'previews' in file_group and 'pure_color_masks' in file_group:
+            #     saved_files = process_file_pair(
+            #         file_group['previews'], file_group['pure_color_masks'],
+            #         base_idx, 0, 'previews'
+            #     )
+            #     total_patches_created += len(saved_files) // 2
 
             # 如果不需要保留原文件，删除原文件
             if not KEEP_ORIGINAL:
-                for subdir_key in ['img', 'masks', 'previews', 'pure_color_masks']:
+                # for subdir_key in ['img', 'masks', 'previews', 'pure_color_masks']:
+                for subdir_key in ['img', 'masks']:
                     if subdir_key in file_group:
                         file_group[subdir_key].unlink()
 

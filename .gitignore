@@ -141,3 +141,5 @@ dmypy.json
 .pyre/
 
 img/
+miou_out/
+miou_out_virtual/

@@ -65,7 +65,7 @@ def process_folder(input_dir, image_output_dir, mask_output_dir):
         if filename.endswith('.json'):
             # 构建文件路径
             json_path = os.path.join(input_dir, filename)
-            image_filename = filename.replace('.json', '.jpg')
+            image_filename = filename.replace('.json', '.png')
             image_path = os.path.join(input_dir, image_filename)
             
             # 检查图像文件是否存在
@@ -85,9 +85,9 @@ def process_folder(input_dir, image_output_dir, mask_output_dir):
 
 if __name__ == "__main__":
     # 设置路径（根据你的实际情况修改）
-    input_dir = r"E:\\06_Temporary\\bridge_poly"
-    image_output_dir = r"E:\\06_Temporary\\data_bridge\\img"
-    mask_output_dir = r"E:\\06_Temporary\\data_bridge\\masks"
+    input_dir = r"E:\\06_Temporary\\bridge_poly_2"
+    image_output_dir = r"E:\\06_Temporary\\bridge_poly_2"
+    mask_output_dir = r"VOCdevkit\\VOC2007\\SegmentationClass"
     
     # 如果需要命令行参数，可以取消下面的注释
     # if len(sys.argv) != 4:

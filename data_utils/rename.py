@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 # 配置参数 - 按你的实际情况修改
-BASE_DIR = Path("E:\\06_Temporary\\data_bridge_aug")  # 当前目录，或者改成你的数据集目录路径
+BASE_DIR = Path("VOCdevkit\\VOC2007-temp")  # 当前目录，或者改成你的数据集目录路径
 FOLDERS = ["img", "masks", "pure_color_masks", "previews"]  # 要处理的文件夹列表
 
 def rename_files_to_numbers():
