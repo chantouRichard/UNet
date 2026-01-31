@@ -1,6 +1,7 @@
 import os
 from PIL import Image
 import sys
+from tqdm import tqdm
 
 def convert_png_to_jpg(folder_path):
     """
@@ -16,8 +17,11 @@ def convert_png_to_jpg(folder_path):
         converted_count = 0
         error_count = 0
         
-        # 遍历文件夹中的所有文件
-        for filename in os.listdir(folder_path):
+        # 遍历文件夹中的所有文件，获取所有png文件列表，以便 tqdm 计算总长度
+        files = [f for f in os.listdir(folder_path) if f.lower().endswith('.png')]
+        
+        # 使用 tqdm 包装列表
+        for filename in tqdm(files, desc="转换进度", unit="张"):
             if filename.lower().endswith('.png'):
                 # 构建完整文件路径
                 png_path = os.path.join(folder_path, filename)
@@ -39,7 +43,7 @@ def convert_png_to_jpg(folder_path):
                     
                     # 删除原PNG文件
                     os.remove(png_path)
-                    print(f"已转换: {filename} -> {jpg_filename}")
+                    # print(f"已转换: {filename} -> {jpg_filename}")
                     converted_count += 1
                     
                 except Exception as e:

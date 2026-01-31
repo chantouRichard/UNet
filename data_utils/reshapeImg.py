@@ -265,7 +265,7 @@ def create_output_directories():
 
 
 def process_file_pair(img_path: Path, mask_path: Path, base_idx: int,
-                      step: int, subdir_key: str):
+                      step: int, subdir_key: str, output_dir: Path):
     """
     处理单对文件并保存裁剪结果
     """
@@ -292,29 +292,33 @@ def process_file_pair(img_path: Path, mask_path: Path, base_idx: int,
         mask_ext = mask_path.suffix
 
         # 保存img patch
-        output_img_path = OUTPUT_DATASET_DIR / SUBDIRS[subdir_key] / f"{output_basename}{img_ext}"
+        output_img_path = output_dir / SUBDIRS[subdir_key] / f"{output_basename}{img_ext}"
         patch_img.save(output_img_path)
         saved_files.append(output_img_path)
 
         # 保存mask patch
         # mask对应的子目录名
         mask_subdir_key = 'masks' if subdir_key == 'img' else 'pure_color_masks'
-        output_mask_path = OUTPUT_DATASET_DIR / SUBDIRS[mask_subdir_key] / f"{output_basename}{mask_ext}"
+        output_mask_path = output_dir / SUBDIRS[mask_subdir_key] / f"{output_basename}{mask_ext}"
         Image.fromarray(patch_mask).save(output_mask_path)
         saved_files.append(output_mask_path)
 
     return saved_files
 
 
-def process_dataset():
+def process_dataset(source_dir: Path, output_dir: Path):
     """处理整个数据集"""
-    # 1. 创建输出目录
-    if VERBOSE:
-        print("\n创建输出目录结构...")
-    create_output_directories()
+    # 确保路径是 Path 对象
+    source_dir = Path(source_dir)
+    output_dir = Path(output_dir)
+
+    # 1. 创建输出目录 (这里需要稍作修改，内部直接引用传入的 output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for subdir_name in SUBDIRS.values():
+        (output_dir / subdir_name).mkdir(parents=True, exist_ok=True)
 
     # 2. 扫描数据集
-    file_groups = scan_dataset_directory(SOURCE_DATASET_DIR)
+    file_groups = scan_dataset_directory(source_dir)
 
     if not file_groups:
         print("\n错误: 未找到任何有效的文件组")
@@ -349,7 +353,7 @@ def process_dataset():
             if 'img' in file_group and 'masks' in file_group:
                 saved_files = process_file_pair(
                     file_group['img'], file_group['masks'],
-                    base_idx, 0, 'img'
+                    base_idx, 0, 'img', output_dir
                 )
                 total_patches_created += len(saved_files) // 2
 
@@ -387,8 +391,16 @@ def process_dataset():
     print(f"{'=' * 60}")
 
 
-def main():
-    """主函数"""
+def main(source_path=None, output_path=None, auto_confirm=False):
+    """
+    主函数
+    source_path: 源目录
+    output_path: 输出目录
+    auto_confirm: 是否跳过输入确认（Pipeline调用时设为True）
+    """
+    # 优先使用传参，否则使用脚本顶部的默认常量
+    src = Path(source_path) if source_path else SOURCE_DATASET_DIR
+    out = Path(output_path) if output_path else OUTPUT_DATASET_DIR
     print("掩码数据集裁剪工具")
     print("=" * 60)
     print(f"源数据集: {SOURCE_DATASET_DIR}")
@@ -400,13 +412,13 @@ def main():
     print("=" * 60)
 
     # 确认执行
-    response = input("\n是否开始裁剪? (yes/no): ")
-    if response.lower() not in ['yes', 'y']:
-        print("操作已取消")
-        sys.exit(0)
+    # response = input("\n是否开始裁剪? (yes/no): ")
+    # if response.lower() not in ['yes', 'y']:
+    #     print("操作已取消")
+    #     sys.exit(0)
 
     # 处理数据集
-    process_dataset()
+    process_dataset(src, out)
 
 
 if __name__ == "__main__":

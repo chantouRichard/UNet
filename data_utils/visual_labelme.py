@@ -28,8 +28,8 @@ def process_and_visualize(image_path):
         print(f"❌ 错误: 没找到对应的 JSON 文件: {json_path}")
         return
 
-    # 线条宽度映射表
-    width_map = {"1": 2, "2": 4, "3": 6, "4": 8, "9": 18}
+    # 线条宽度映射表 (按你要求的 1->2, 2->3, 3->4, 4->5 更新)
+    width_map = {"1": 2, "2": 3, "3": 4, "4": 5}
 
     temp_dir = tempfile.mkdtemp()
     try:
@@ -38,7 +38,7 @@ def process_and_visualize(image_path):
             print("❌ 错误: 无法读取图片。")
             return
         
-        # 创建一个和原图一样大的掩码层
+        # 创建一个和原图一样大的黑底掩码层 (用于计算面积)
         mask = np.zeros_like(img)
         
         with open(json_path, 'r', encoding='utf-8') as f:
@@ -46,26 +46,40 @@ def process_and_visualize(image_path):
 
         for shape in data['shapes']:
             label = str(shape['label'])
-            shape_type = shape['shape_type']
+            shape_type = shape.get('shape_type', '').lower()
             points = shape['points']
 
-            # 情况 A: 需要转换宽度的线条 (label 1, 2, 3, 4, 9)
+            # 逻辑 A: 处理线段
             if shape_type in ['line', 'linestrip'] and label in width_map:
                 w = width_map[label]
                 poly_points = line_to_polygon(points, width=w)
                 if poly_points:
                     pts = np.array(poly_points, np.int32)
-                    cv2.fillPoly(mask, [pts], (0, 255, 0)) # 绿色填充
+                    cv2.fillPoly(mask, [pts], (0, 255, 0))
 
-            # 情况 B: label 为 10 的原生多边形 (直接绘制区域)
-            elif shape_type == 'polygon' and label == "10":
+            # 逻辑 B: 处理 Label 10 的原生多边形
+            elif label == "10" and shape_type == 'polygon':
                 pts = np.array(points, np.int32)
-                cv2.fillPoly(mask, [pts], (0, 255, 0)) # 绿色填充
+                cv2.fillPoly(mask, [pts], (0, 255, 0))
 
-        # 图像融合：1.0 是原图权重，0.5 是掩码透明度
-        blended = cv2.addWeighted(img, 0.6, mask, 0.2, 0)
+        # --- 计算占比逻辑 ---
+        # 将掩码转为单通道灰度图，非零部分即为标注区域
+        gray_mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+        labeled_pixels = cv2.countNonZero(gray_mask)
+        total_pixels = img.shape[0] * img.shape[1]
+        percentage = (labeled_pixels / total_pixels) * 100
 
-        # 保存并调用本地查看器
+        print("-" * 30)
+        print(f"📊 标注面积统计:")
+        print(f"   总像素点: {total_pixels}")
+        print(f"   标注像素: {labeled_pixels}")
+        print(f"   掩码占比: {percentage:.4f}%")
+        print("-" * 30)
+
+        # 图像融合：0.6 是原图亮度，0.4 是掩码权重（稍微加深了一点掩码，方便观察）
+        blended = cv2.addWeighted(img, 0.6, mask, 0.4, 0)
+
+        # 保存并预览
         temp_img_path = os.path.join(temp_dir, "temp_preview.jpg")
         cv2.imwrite(temp_img_path, blended)
         

@@ -19,7 +19,7 @@ train_percent       = 0.9
 #-------------------------------------------------------#
 VOCdevkit_path      = 'VOCdevkit'
 
-if __name__ == "__main__":
+def main():
     random.seed(0)
     print("Generate txt in ImageSets.")
     segfilepath     = os.path.join(VOCdevkit_path, 'VOC2007\\SegmentationClass')
@@ -96,3 +96,6 @@ if __name__ == "__main__":
     print("JPEGImages中的图片应当为.jpg文件、SegmentationClass中的图片应当为.png文件。")
     print("如果格式有误，参考:")
     print("https://github.com/bubbliiiing/segmentation-format-fix")
+
+if __name__ == "__main__":
+    main()

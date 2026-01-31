@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import sys
-
+from tqdm import tqdm
 def json_to_mask(json_path, image_path, mask_output_dir, image_output_dir):
     """
     从JSON文件中读取多边形标注并生成掩码
@@ -42,7 +42,7 @@ def json_to_mask(json_path, image_path, mask_output_dir, image_output_dir):
         mask_output_path = os.path.join(mask_output_dir, mask_filename)
         cv2.imwrite(mask_output_path, mask)
         
-        print(f"已处理: {image_filename}")
+        # print(f"已处理: {image_filename}")
         return True
         
     except Exception as e:
@@ -60,24 +60,31 @@ def process_folder(input_dir, image_output_dir, mask_output_dir):
     processed_count = 0
     error_count = 0
     
-    # 遍历输入目录中的所有文件
-    for filename in os.listdir(input_dir):
-        if filename.endswith('.json'):
-            # 构建文件路径
-            json_path = os.path.join(input_dir, filename)
-            image_filename = filename.replace('.json', '.png')
-            image_path = os.path.join(input_dir, image_filename)
-            
-            # 检查图像文件是否存在
-            if os.path.exists(image_path):
-                # 处理文件
-                if json_to_mask(json_path, image_path, mask_output_dir, image_output_dir):
-                    processed_count += 1
-                else:
-                    error_count += 1
+    # --- 修改部分：先获取文件列表 ---
+    json_files = [f for f in os.listdir(input_dir) if f.endswith('.json')]
+    
+    # --- 修改部分：使用 tqdm 包装循环 ---
+    for filename in tqdm(json_files, desc="生成掩码", unit="张"):
+        json_path = os.path.join(input_dir, filename)
+        
+        # 兼容不同后缀名 (png/jpg/jpeg)
+        image_filename = None
+        for ext in ['.png', '.jpg', '.jpeg']:
+            test_path = os.path.join(input_dir, filename.replace('.json', ext))
+            if os.path.exists(test_path):
+                image_filename = filename.replace('.json', ext)
+                image_path = test_path
+                break
+        
+        if image_filename:
+            if json_to_mask(json_path, image_path, mask_output_dir, image_output_dir):
+                processed_count += 1
             else:
-                print(f"警告: 未找到图像文件 {image_filename}")
                 error_count += 1
+        else:
+            # 使用 tqdm.write 替代 print，防止破坏进度条
+            tqdm.write(f"警告: 未找到对应的图像文件: {filename}")
+            error_count += 1
     
     print(f"\n处理完成!")
     print(f"成功处理: {processed_count} 个文件")
@@ -85,9 +92,9 @@ def process_folder(input_dir, image_output_dir, mask_output_dir):
 
 if __name__ == "__main__":
     # 设置路径（根据你的实际情况修改）
-    input_dir = r"E:\\06_Temporary\\bridge_poly_2"
-    image_output_dir = r"E:\\06_Temporary\\bridge_poly_2"
-    mask_output_dir = r"VOCdevkit\\VOC2007\\SegmentationClass"
+    input_dir = r"img"
+    image_output_dir = r"img\\img"
+    mask_output_dir = r"img\\masks"
     
     # 如果需要命令行参数，可以取消下面的注释
     # if len(sys.argv) != 4:

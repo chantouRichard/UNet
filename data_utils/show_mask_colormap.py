@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 from PIL import Image
 
-mask = cv2.imread('temp\\data_aug_2\\masks\\bridge_2_aug004.png', cv2.IMREAD_GRAYSCALE)
+mask = cv2.imread('img\\masks\\bridge_2.png', cv2.IMREAD_GRAYSCALE)
 
 # 颜色映射（RGB格式）
 color_map = {

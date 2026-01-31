@@ -72,15 +72,15 @@ def batch_visualize(img_folder, mask_folder, save_dir=None, show=False):
 
 # 1. 单张图片可视化 (只显示不保存)
 # visualize_segmentation(
-#     image_path=r"VOCdevkit\\VOC2007\\JPEGImages\\bridge_1_aug_002.png",
-#     mask_path=r"VOCdevkit\\VOC2007\\SegmentationClass\\bridge_1_aug_002.png",
+#     image_path=r"VOCdevkit\\VOC2007\\img\\0001.png",
+#     mask_path=r"VOCdevkit\\VOC2007\\masks\\0001.png",
 #     save_dir=None, 
 #     show=True
 # )
 
 # 2. 批量处理并保存 (不显示，直接存入目标文件夹)
-IMG_DIR = r"VOCdevkit\\VOC2007\\JPEGImages"
-MASK_DIR = r"VOCdevkit\\VOC2007\\SegmentationClass"
-OUT_DIR = r"VOCdevkit\\VOC2007\\previews"
+IMG_DIR = r"img\\img_aug\\JPEGImages"
+MASK_DIR = r"img\\img_aug\\SegmentationClass"
+OUT_DIR = r"img\\img_aug\\previews"
 
 batch_visualize(IMG_DIR, MASK_DIR, save_dir=OUT_DIR, show=False)

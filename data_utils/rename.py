@@ -1,15 +1,16 @@
 import os
 from pathlib import Path
-
+from tqdm import tqdm
 # 配置参数 - 按你的实际情况修改
-BASE_DIR = Path("VOCdevkit\\VOC2007-temp")  # 当前目录，或者改成你的数据集目录路径
 FOLDERS = ["img", "masks", "pure_color_masks", "previews"]  # 要处理的文件夹列表
 
-def rename_files_to_numbers():
+def rename_files_to_numbers(BASE_DIR):
     """
     将所有文件夹中的文件重命名为0001开始的四位数字
     按文件名排序，确保对应关系
     """
+    # 强制转换，防止外部传入的是字符串
+    BASE_DIR = Path(BASE_DIR)
     print("开始重命名文件...")
     
     # 检查所有文件夹是否存在
@@ -72,7 +73,7 @@ def rename_files_to_numbers():
             print(f"警告: {folder} 有 {len(folder_files)} 个文件，但基准文件夹有 {len(all_files)} 个文件")
         
         # 重命名文件
-        for idx, old_filename in enumerate(folder_files, 1):
+        for idx, old_filename in enumerate(tqdm(folder_files, desc=f"正在重命名 {folder}", unit="file"), 1):
             if idx <= len(file_mapping):
                 # 获取对应的新名称
                 old_name_key = all_files[idx-1]  # 使用基准文件夹的文件名作为键
@@ -89,7 +90,7 @@ def rename_files_to_numbers():
                     
                     try:
                         old_path.rename(new_path)
-                        print(f"  ✓ {old_filename} -> {new_filename}")
+                        # print(f"  ✓ {old_filename} -> {new_filename}")
                         total_renamed += 1
                     except Exception as e:
                         print(f"  ✗ 重命名失败 {old_filename}: {e}")
@@ -101,4 +102,6 @@ def rename_files_to_numbers():
     print(f"所有文件现在已按顺序命名为 0001, 0002, 0003...")
 
 if __name__ == "__main__":
-    rename_files_to_numbers()
+    BASE_DIR = Path("VOCdevkit\\VOC2007")  # 当前目录，或者改成你的数据集目录路径
+    
+    rename_files_to_numbers(BASE_DIR)
