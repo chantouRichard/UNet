@@ -40,20 +40,33 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             #----------------------#
             #   损失计算
             #----------------------#
-            if focal_loss:
-                loss = Focal_Loss(outputs, pngs, weights, num_classes = num_classes)
-            else:
-                loss = CE_Loss(outputs, pngs, weights, num_classes = num_classes)
+            #----------------------#
+            #   损失计算 (深监督逻辑)
+            #----------------------#
+            def compute_multi_loss(preds, target_pngs, target_labels, weights):
+                # 针对 4 个辅助输出和 1 个最终输出计算 Loss
+                multi_losses = []
+                for i in range(5):
+                    if focal_loss:
+                        l = Focal_Loss(preds[i], target_pngs, weights, num_classes=num_classes)
+                    else:
+                        l = CE_Loss(preds[i], target_pngs, weights, num_classes=num_classes)
+                    
+                    if dice_loss:
+                        l = l + Dice_loss(preds[i], target_labels)
+                    multi_losses.append(l)
+                
+                # 权重分配：辅助层各占 0.1，最终融合层占 1.0
+                total_l = 0.1 * (multi_losses[0] + multi_losses[1] + multi_losses[2] + multi_losses[3]) + multi_losses[4]
+                return total_l
 
-            if dice_loss:
-                main_dice = Dice_loss(outputs, labels)
-                loss      = loss + main_dice
+            loss = compute_multi_loss(outputs, pngs, labels, weights)
 
             with torch.no_grad():
                 #-------------------------------#
                 #   计算f_score
                 #-------------------------------#
-                _f_score = f_score(outputs, labels)
+                _f_score = f_score(outputs[4], labels)
 
             # print(f"Loss值: {loss.item()}")
             # print(f"Loss是否有限: {torch.isfinite(loss)}")
@@ -85,7 +98,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
                     #-------------------------------#
                     #   计算f_score
                     #-------------------------------#
-                    _f_score = f_score(outputs, labels)
+                    _f_score = f_score(outputs[4], labels)
 
             #----------------------#
             #   反向传播
@@ -129,18 +142,12 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             #----------------------#
             #   损失计算
             #----------------------#
-            if focal_loss:
-                loss = Focal_Loss(outputs, pngs, weights, num_classes = num_classes)
-            else:
-                loss = CE_Loss(outputs, pngs, weights, num_classes = num_classes)
-
-            if dice_loss:
-                main_dice = Dice_loss(outputs, labels)
-                loss  = loss + main_dice
+            # 使用同样的计算函数
+            loss = compute_multi_loss(outputs, pngs, labels, weights)
             #-------------------------------#
             #   计算f_score
             #-------------------------------#
-            _f_score    = f_score(outputs, labels)
+            _f_score = f_score(outputs[4], labels)
 
             val_loss    += loss.item()
             val_f_score += _f_score.item()
@@ -213,7 +220,7 @@ def fit_one_epoch_no_val(model_train, model, loss_history, optimizer, epoch, epo
                 #-------------------------------#
                 #   计算f_score
                 #-------------------------------#
-                _f_score = f_score(outputs, labels)
+                _f_score = f_score(outputs[4], labels)
 
             loss.backward()
             optimizer.step()
@@ -240,7 +247,7 @@ def fit_one_epoch_no_val(model_train, model, loss_history, optimizer, epoch, epo
                     #-------------------------------#
                     #   计算f_score
                     #-------------------------------#
-                    _f_score = f_score(outputs, labels)
+                    _f_score = f_score(outputs[4], labels)
 
             #----------------------#
             #   反向传播

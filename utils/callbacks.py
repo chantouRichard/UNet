@@ -138,11 +138,25 @@ class EvalCallback():
             #---------------------------------------------------#
             #   图片传入网络进行预测
             #---------------------------------------------------#
-            pr = self.net(images)[0]
+            outputs = self.net(images)
+            
+            # --- 核心修改开始 ---
+            # 如果输出是元组（MDANet的多输出），取最后一个融合层 score_final
+            if isinstance(outputs, (tuple, list)):
+                pr = outputs[4]
+            else:
+                pr = outputs
+            
+            # 此时 pr 的维度是 [1, num_classes, H, W]
+            # 我们只需要第一张图（Batch=1），所以取 [0]，变为 [num_classes, H, W]
+            pr = pr[0] 
+            # --- 核心修改结束 ---
+
             #---------------------------------------------------#
             #   取出每一个像素点的种类
+            #   现在的 pr 是 [num_classes, H, W]，permute 后变为 [H, W, num_classes]
             #---------------------------------------------------#
-            pr = F.softmax(pr.permute(1,2,0),dim = -1).cpu().numpy()
+            pr = F.softmax(pr.permute(1, 2, 0), dim=-1).cpu().numpy()
             #--------------------------------------#
             #   将灰条部分截取掉
             #--------------------------------------#

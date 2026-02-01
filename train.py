@@ -177,7 +177,7 @@ if __name__ == "__main__":
     #-----------------------------------------------------#
     #   input_shape     输入图片的大小，32的倍数
     #-----------------------------------------------------#
-    input_shape = [1024, 1024]
+    input_shape = [512, 512]
     
     #----------------------------------------------------------------------------------------------------------------------------#
     #   训练分为两个阶段，分别是冻结阶段和解冻阶段。设置冻结阶段是为了满足机器性能不足的同学的训练需求。
@@ -294,7 +294,7 @@ if __name__ == "__main__":
     #   种类多（十几类）时，如果batch_size比较大（10以上），那么设置为True
     #   种类多（十几类）时，如果batch_size比较小（10以下），那么设置为False
     #------------------------------------------------------------------#
-    dice_loss       = False
+    dice_loss       = True
     #------------------------------------------------------------------#
     #   是否使用focal loss来防止正负样本不平衡
     #------------------------------------------------------------------#
@@ -344,7 +344,28 @@ if __name__ == "__main__":
         else:
             download_weights(backbone)
 
-    model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone).train()
+    import torch.nn as nn
+    def convert_bn_to_gn(module):
+        """
+        递归将模型中所有的 BatchNorm 替换为 GroupNorm
+        适用于 BatchSize=1 的情况
+        """
+        for name, child in module.named_children():
+            if isinstance(child, nn.BatchNorm2d):
+                num_channels = child.num_features
+                # 选一个能被整除的组数，通常 8 是个好选择
+                num_groups = 8 if num_channels % 8 == 0 else (4 if num_channels % 4 == 0 else 1)
+                setattr(module, name, nn.GroupNorm(num_groups, num_channels))
+            elif isinstance(child, (nn.BatchNorm1d, nn.SyncBatchNorm)):
+                num_channels = child.num_features
+                # BatchNorm1d 常见于注意力机制的线性层后，直接换成 LayerNorm 最稳
+                setattr(module, name, nn.LayerNorm(num_channels))
+            else:
+                convert_bn_to_gn(child)
+    model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone)
+    convert_bn_to_gn(model) # 关键：模型定义完直接转
+    print("\n直接转BatchNorm\n")
+    model.train()
     if not pretrained:
         weights_init(model)
     if model_path != '':

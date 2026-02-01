@@ -4,21 +4,34 @@ import torch.nn as nn
 from nets.resnet import resnet50
 from nets.vgg import VGG16
 
+from nets.mda_parts import *
 
 class unetUp(nn.Module):
     def __init__(self, in_size, out_size):
         super(unetUp, self).__init__()
+        # 修改点：参考 MDANet 的 DoubleConvWithAtt 逻辑
         self.conv1  = nn.Conv2d(in_size, out_size, kernel_size = 3, padding = 1)
-        self.conv2  = nn.Conv2d(out_size, out_size, kernel_size = 3, padding = 1)
-        self.up     = nn.UpsamplingBilinear2d(scale_factor = 2)
+        self.bn1    = nn.BatchNorm2d(out_size)
         self.relu   = nn.ReLU(inplace = True)
+        self.att1   = MDA_CA_Block(out_size) # 引入曲线注意力
+
+        self.conv2  = nn.Conv2d(out_size, out_size, kernel_size = 3, padding = 1)
+        self.bn2    = nn.BatchNorm2d(out_size)
+        self.att2   = MDA_CA_Block(out_size) # 再次引入
+        
+        self.up     = nn.UpsamplingBilinear2d(scale_factor = 2)
 
     def forward(self, inputs1, inputs2):
         outputs = torch.cat([inputs1, self.up(inputs2)], 1)
         outputs = self.conv1(outputs)
+        outputs = self.bn1(outputs)
         outputs = self.relu(outputs)
+        outputs = self.att1(outputs) # 注意力应用
+
         outputs = self.conv2(outputs)
+        outputs = self.bn2(outputs)
         outputs = self.relu(outputs)
+        outputs = self.att2(outputs) # 注意力应用
         return outputs
 
 class Unet(nn.Module):
@@ -55,6 +68,23 @@ class Unet(nn.Module):
         else:
             self.up_conv = None
 
+        # 在 self.final 前面添加 side 层和输出层
+        # 侧边输出通道数统一设为 16，参考 MDANet
+        side_channels = 16
+
+        # side4 对应 up4 (1/8尺度), side3 对应 up3 (1/4尺度)...
+        self.side4 = Conv_Up(out_filters[3], side_channels, 8) 
+        self.side3 = Conv_Up(out_filters[2], side_channels, 4)
+        self.side2 = Conv_Up(out_filters[1], side_channels, 2)
+        self.side1 = Conv_Up(out_filters[0], side_channels, 0) # 1/1尺度
+
+        # 分别对应的评分层 (OutConv)
+        self.score1 = OutConv(side_channels, num_classes)
+        self.score2 = OutConv(side_channels, num_classes)
+        self.score3 = OutConv(side_channels, num_classes)
+        self.score4 = OutConv(side_channels, num_classes)
+        self.score_final = OutConv(side_channels, num_classes) # 最终融合层
+        
         self.final = nn.Conv2d(out_filters[0], num_classes, 1)
 
         self.backbone = backbone
@@ -70,12 +100,24 @@ class Unet(nn.Module):
         up2 = self.up_concat2(feat2, up3)
         up1 = self.up_concat1(feat1, up2)
 
-        if self.up_conv != None:
-            up1 = self.up_conv(up1)
+        # --- MDA 核心逻辑：侧边输出与融合 ---
+        s4 = self.side4(up4)
+        s3 = self.side3(up3)
+        s2 = self.side2(up2)
+        s1 = self.side1(up1)
 
-        final = self.final(up1)
-        
-        return final
+        # 各尺度预测图 (用于计算多准则 Loss)
+        score4 = self.score4(s4)
+        score3 = self.score3(s3)
+        score2 = self.score2(s2)
+        score1 = self.score1(s1)
+
+        # 最终融合预测
+        fuse = s1 + s2 + s3 + s4
+        score_final = self.score_final(fuse)
+
+        # 返回 5 个输出，对应 MDANet 的训练需求
+        return score1, score2, score3, score4, score_final
 
     def freeze_backbone(self):
         if self.backbone == "vgg":
