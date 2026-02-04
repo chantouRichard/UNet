@@ -173,7 +173,7 @@ if __name__ == "__main__":
     #   一般来讲，网络从0开始的训练效果会很差，因为权值太过随机，特征提取效果不明显，因此非常、非常、非常不建议大家从0开始训练！
     #   如果一定要从0开始，可以了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path  = "logs/best_unet_channel_2.pth"
+    model_path  = "model_data/unet_vgg_voc.pth"
     #-----------------------------------------------------#
     #   input_shape     输入图片的大小，32的倍数
     #-----------------------------------------------------#
@@ -222,8 +222,8 @@ if __name__ == "__main__":
     #                       (当Freeze_Train=False时失效)
     #------------------------------------------------------------------#
     Init_Epoch          = 0
-    Freeze_Epoch        = 5
-    Freeze_batch_size   = 1
+    Freeze_Epoch        = 15
+    Freeze_batch_size   = 4
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
     #   此时模型的主干不被冻结了，特征提取网络会发生改变
@@ -231,8 +231,8 @@ if __name__ == "__main__":
     #   UnFreeze_Epoch          模型总共训练的epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 10
-    Unfreeze_batch_size = 1
+    UnFreeze_Epoch      = 30
+    Unfreeze_batch_size = 4
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
@@ -521,9 +521,9 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
-        CBAM_WARMUP_EPOCHS = 2      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 5 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 10    # 20-40epoch全部解冻
+        CBAM_WARMUP_EPOCHS = 5      # 前5epoch只训CBAM
+        PARTIAL_UNFREEZE_EPOCHS = 15 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, UnFreeze_Epoch):
             #---------------------------------------#
             #   如果模型有冻结学习部分
@@ -590,11 +590,11 @@ if __name__ == "__main__":
 
             # 每10个epoch可视化一次
             # 在调用 visualize_predictions 前添加调试代码
-            if local_rank == 0 and epoch % 2 == 0:
+            if local_rank == 0 and epoch % 3 == 0:
                 visualize_predictions(model, gen_val, epoch, num_samples=2,
                                       save_dir=os.path.join(log_dir, 'predictions/'))
             # 添加绘图代码（只在主进程且每5个epoch绘制）
-            if local_rank == 0 and epoch % 2 == 0:
+            if local_rank == 0 and epoch % 3 == 0:
 
                 # 绘制损失曲线
                 plt.figure(figsize=(12, 4))

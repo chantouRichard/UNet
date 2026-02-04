@@ -150,9 +150,9 @@ def draw_plot_func(values, name_classes, plot_title, x_label, output_path, tick_
 
     fig.tight_layout()
     fig.savefig(output_path)
-    if plt_show:
-        plt.show()
-    plt.close()
+    # if plt_show:
+    #     plt.show()
+    # plt.close()
 
 def show_results(miou_out_path, hist, IoUs, PA_Recall, Precision, name_classes, tick_font_size = 12):
     draw_plot_func(IoUs, name_classes, "mIoU = {0:.2f}%".format(np.nanmean(IoUs)*100), "Intersection over Union", \
