@@ -85,6 +85,26 @@ class Unet(object):
     #---------------------------------------------------#
     def generate(self, onnx=False):
         self.net = unet(num_classes = self.num_classes, backbone=self.backbone)
+        
+        def convert_bn_to_gn(module):
+            """
+            递归将模型中所有的 BatchNorm 替换为 GroupNorm
+            适用于 BatchSize=1 的情况
+            """
+            for name, child in module.named_children():
+                if isinstance(child, nn.BatchNorm2d):
+                    num_channels = child.num_features
+                    # 选一个能被整除的组数，通常 8 是个好选择
+                    num_groups = 8 if num_channels % 8 == 0 else (4 if num_channels % 4 == 0 else 1)
+                    setattr(module, name, nn.GroupNorm(num_groups, num_channels))
+                elif isinstance(child, (nn.BatchNorm1d, nn.SyncBatchNorm)):
+                    num_channels = child.num_features
+                    # BatchNorm1d 常见于注意力机制的线性层后，直接换成 LayerNorm 最稳
+                    setattr(module, name, nn.LayerNorm(num_channels))
+                else:
+                    convert_bn_to_gn(child)
+                    
+        convert_bn_to_gn(self.net)
 
         device      = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.net.load_state_dict(torch.load(self.model_path, map_location=device))
@@ -128,7 +148,19 @@ class Unet(object):
             #---------------------------------------------------#
             #   图片传入网络进行预测
             #---------------------------------------------------#
-            pr = self.net(images)[0]
+            outputs = self.net(images)
+            
+            # --- 核心修改开始 ---
+            # 如果输出是元组（MDANet的多输出），取最后一个融合层 score_final
+            if isinstance(outputs, (tuple, list)):
+                pr = outputs[4]
+            else:
+                pr = outputs
+            
+            # 此时 pr 的维度是 [1, num_classes, H, W]
+            # 我们只需要第一张图（Batch=1），所以取 [0]，变为 [num_classes, H, W]
+            pr = pr[0] 
+            # --- 核心修改结束 ---
             #---------------------------------------------------#
             #   取出每一个像素点的种类
             #---------------------------------------------------#
@@ -226,7 +258,19 @@ class Unet(object):
             #---------------------------------------------------#
             #   图片传入网络进行预测
             #---------------------------------------------------#
-            pr = self.net(images)[0]
+            outputs = self.net(images)
+            
+            # --- 核心修改开始 ---
+            # 如果输出是元组（MDANet的多输出），取最后一个融合层 score_final
+            if isinstance(outputs, (tuple, list)):
+                pr = outputs[4]
+            else:
+                pr = outputs
+            
+            # 此时 pr 的维度是 [1, num_classes, H, W]
+            # 我们只需要第一张图（Batch=1），所以取 [0]，变为 [num_classes, H, W]
+            pr = pr[0] 
+            # --- 核心修改结束 ---
             #---------------------------------------------------#
             #   取出每一个像素点的种类
             #---------------------------------------------------#
@@ -243,7 +287,19 @@ class Unet(object):
                 #---------------------------------------------------#
                 #   图片传入网络进行预测
                 #---------------------------------------------------#
-                pr = self.net(images)[0]
+                outputs = self.net(images)
+            
+                # --- 核心修改开始 ---
+                # 如果输出是元组（MDANet的多输出），取最后一个融合层 score_final
+                if isinstance(outputs, (tuple, list)):
+                    pr = outputs[4]
+                else:
+                    pr = outputs
+                
+                # 此时 pr 的维度是 [1, num_classes, H, W]
+                # 我们只需要第一张图（Batch=1），所以取 [0]，变为 [num_classes, H, W]
+                pr = pr[0] 
+                # --- 核心修改结束 ---
                 #---------------------------------------------------#
                 #   取出每一个像素点的种类
                 #---------------------------------------------------#
@@ -321,7 +377,19 @@ class Unet(object):
             #---------------------------------------------------#
             #   图片传入网络进行预测
             #---------------------------------------------------#
-            pr = self.net(images)[0]
+            outputs = self.net(images)
+            
+            # --- 核心修改开始 ---
+            # 如果输出是元组（MDANet的多输出），取最后一个融合层 score_final
+            if isinstance(outputs, (tuple, list)):
+                pr = outputs[4]
+            else:
+                pr = outputs
+            
+            # 此时 pr 的维度是 [1, num_classes, H, W]
+            # 我们只需要第一张图（Batch=1），所以取 [0]，变为 [num_classes, H, W]
+            pr = pr[0] 
+            # --- 核心修改结束 ---
             #---------------------------------------------------#
             #   取出每一个像素点的种类
             #---------------------------------------------------#

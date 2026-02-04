@@ -153,3 +153,38 @@ class Unet(nn.Module):
                     print(f"解冻高层: {name}")
                 else:
                     param.requires_grad = False
+                    
+    def set_mdanet_trainable(self, trainable=True):
+        """专门控制 MDANet 的 5 个输出分支和 MDA 模块"""
+        for name, param in self.named_parameters():
+            # 锁定 side 输出层、融合层 (fuse) 以及 MDA 注意力模块
+            if any(x in name.lower() for x in ['side', 'fuse', 'mda', 'transform']):
+                param.requires_grad = trainable
+                if trainable:
+                    print(f"训练 MDANet 模块: {name}")
+
+    def mdanet_freeze_strategy(self, stage):
+        """
+        根据阶段执行组合策略
+        stage 1: 仅训练新模块 (CBAM + MDANet + Decoder)
+        stage 2: 训练新模块 + Backbone 高层
+        stage 3: 全解冻
+        """
+        # 先默认全部解冻，再根据阶段精细锁定
+        self.unfreeze_backbone()
+        
+        if stage == 1:
+            self.freeze_backbone() # 锁死 VGG
+            self.set_cbam_trainable(True) # 练 CBAM
+            self.set_mdanet_trainable(True) # 练 MDA
+            print(">>> 策略：仅训练注意力与预测分支")
+            
+        elif stage == 2:
+            self.set_backbone_partial_unfreeze() # 练 VGG 高层
+            self.set_cbam_trainable(True)
+            self.set_mdanet_trainable(True)
+            print(">>> 策略：微调 VGG 高层 + 训练新模块")
+            
+        elif stage == 3:
+            # 全部 True
+            print(">>> 策略：全网络深度微调")

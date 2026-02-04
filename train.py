@@ -41,8 +41,12 @@ import matplotlib.pyplot as plt
 
 
 def visualize_predictions(model, dataloader, epoch, num_samples=2, save_dir='logs/predictions/'):
-    """可视化预测结果"""
+    """可视化预测结果，包含 MDANet 侧边分支"""
     import os
+    import torch.nn.functional as F
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
     os.makedirs(save_dir, exist_ok=True)
 
     model.eval()
@@ -51,56 +55,64 @@ def visualize_predictions(model, dataloader, epoch, num_samples=2, save_dir='log
             if i >= num_samples:
                 break
 
-            # 你的数据格式是三元组: (images, masks, extra_info)
-            images = data[0]  # 图像 tensor
-            masks = data[1]  # 掩码 tensor
-            # data[2] 是额外信息，这里不需要
+            images = data[0]
+            masks = data[1]
 
-            # 确保数据在正确的设备上
             if torch.cuda.is_available():
                 images = images.cuda()
 
-            # 预测（只使用前两个通道）
+            # 1. 获取模型输出
             outputs = model(images)
-            preds = torch.argmax(outputs, dim=1).cpu().numpy()
-
-            # 获取单个样本
-            # 注意：图像是 [C, H, W] 格式，需要转为 [H, W, C]
-            img_np = images[0].permute(1, 2, 0).cpu().numpy()
-            mask_np = masks[0].cpu().numpy()
-            pred_np = preds[0]
-
-            # 图像可能需要反归一化
-            # 如果你的图像是归一化到[0,1]的，可以跳过
-            # 如果归一化到[-1,1]，需要转换：
-            if img_np.min() < 0:
-                img_np = (img_np + 1) / 2  # 从[-1,1]转到[0,1]
-            elif img_np.max() <= 1:
-                img_np = img_np  # 已经是[0,1]
+            
+            # 准备一个列表来存储所有要显示的预测图
+            display_preds = []
+            
+            if isinstance(outputs, (tuple, list)):
+                # 如果是 MDANet，outputs 包含 [side1, side2, side3, side4, final]
+                for out_tensor in outputs:
+                    # 对每个分支进行 argmax
+                    p = torch.argmax(out_tensor, dim=1)[0].cpu().numpy()
+                    display_preds.append(p)
+                titles = ['Side 1', 'Side 2', 'Side 3', 'Side 4', 'Final Prediction']
             else:
-                img_np = img_np.astype(np.uint8)  # 可能是0-255
+                # 普通模型
+                p = torch.argmax(outputs, dim=1)[0].cpu().numpy()
+                display_preds.append(p)
+                titles = ['Prediction']
 
-            # 可视化
-            fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+            # 2. 图像预处理 (原图)
+            img_np = images[0].permute(1, 2, 0).cpu().numpy()
+            if img_np.min() < 0:
+                img_np = (img_np + 1) / 2
+            mask_np = masks[0].cpu().numpy()
 
-            # 原图
+            # 3. 动态计算子图数量
+            # 总列数 = 原图 + 真值 + 预测分支数
+            num_cols = 2 + len(display_preds)
+            fig, axes = plt.subplots(1, num_cols, figsize=(num_cols * 4, 5))
+
+            # 第一张：原图
             axes[0].imshow(img_np)
-            axes[0].set_title(f'Original Image\n{img_np.shape}')
+            axes[0].set_title('Original Image')
             axes[0].axis('off')
 
-            # 真实掩码
-            axes[1].imshow(mask_np, cmap='jet', vmin=0, vmax=num_classes - 1)
-            axes[1].set_title(f'Ground Truth\nClasses: {np.unique(mask_np)}')
+            # 第二张：真值 (GT)
+            axes[1].imshow(mask_np, cmap='jet', vmin=0, vmax=1)
+            axes[1].set_title('Ground Truth')
             axes[1].axis('off')
 
-            # 预测结果
-            axes[2].imshow(pred_np, cmap='jet', vmin=0, vmax=num_classes - 1)
-            axes[2].set_title(f'Prediction\nClasses: {np.unique(pred_np)}')
-            axes[2].axis('off')
+            # 后续：各分支预测图
+            for idx, pred in enumerate(display_preds):
+                ax_idx = idx + 2
+                axes[ax_idx].imshow(pred, cmap='jet', vmin=0, vmax=1)
+                axes[ax_idx].set_title(titles[idx])
+                axes[ax_idx].axis('off')
+                # 额外打印一下每个分支预测出的类别，辅助调试
+                print(f"Epoch {epoch} Sample {i} {titles[idx]} classes: {np.unique(pred)}")
 
-            plt.suptitle(f'Epoch {epoch} - Sample {i + 1}')
+            plt.suptitle(f'Epoch {epoch} - Sample {i + 1} - Multi-Scale Analysis')
             plt.tight_layout()
-            plt.savefig(f'{save_dir}epoch_{epoch}_sample_{i}.png', dpi=150, bbox_inches='tight')
+            plt.savefig(f'{save_dir}epoch_{epoch}_sample_{i}_detailed.png', dpi=150, bbox_inches='tight')
             plt.close()
 
     model.train()
@@ -173,7 +185,7 @@ if __name__ == "__main__":
     #   一般来讲，网络从0开始的训练效果会很差，因为权值太过随机，特征提取效果不明显，因此非常、非常、非常不建议大家从0开始训练！
     #   如果一定要从0开始，可以了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path  = "logs/best_unet_channel_2.pth"
+    model_path  = "model_data/unet_vgg_voc.pth"
     #-----------------------------------------------------#
     #   input_shape     输入图片的大小，32的倍数
     #-----------------------------------------------------#
@@ -223,7 +235,7 @@ if __name__ == "__main__":
     #------------------------------------------------------------------#
     Init_Epoch          = 0
     Freeze_Epoch        = 5
-    Freeze_batch_size   = 1
+    Freeze_batch_size   = 2
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
     #   此时模型的主干不被冻结了，特征提取网络会发生改变
@@ -231,8 +243,8 @@ if __name__ == "__main__":
     #   UnFreeze_Epoch          模型总共训练的epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 10
-    Unfreeze_batch_size = 1
+    UnFreeze_Epoch      = 30
+    Unfreeze_batch_size = 2
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
@@ -542,9 +554,9 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
-        CBAM_WARMUP_EPOCHS = 2      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 5 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 10    # 20-40epoch全部解冻
+        CBAM_WARMUP_EPOCHS = 5      # 前5epoch只训CBAM
+        PARTIAL_UNFREEZE_EPOCHS = 15 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, UnFreeze_Epoch):
             #---------------------------------------#
             #   如果模型有冻结学习部分
@@ -611,11 +623,11 @@ if __name__ == "__main__":
 
             # 每10个epoch可视化一次
             # 在调用 visualize_predictions 前添加调试代码
-            if local_rank == 0 and epoch % 2 == 0:
+            if local_rank == 0 and epoch % 3 == 0:
                 visualize_predictions(model, gen_val, epoch, num_samples=2,
                                       save_dir=os.path.join(log_dir, 'predictions/'))
             # 添加绘图代码（只在主进程且每5个epoch绘制）
-            if local_rank == 0 and epoch % 2 == 0:
+            if local_rank == 0 and epoch % 3 == 0:
 
                 # 绘制损失曲线
                 plt.figure(figsize=(12, 4))

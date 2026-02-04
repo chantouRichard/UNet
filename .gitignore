@@ -142,5 +142,3 @@ dmypy.json
 
 img/
 miou_out/
-miou_out_virtual/
-miou_out_real/

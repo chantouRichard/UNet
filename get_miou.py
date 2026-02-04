@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 from unet import Unet
 from utils.utils_metrics import compute_mIoU, show_results
+from data_utils.visual_mask import batch_visualize
 
 '''
 进行指标评估需要注意以下几点：
@@ -36,9 +37,22 @@ if __name__ == "__main__":
     #-------------------------------------------------------#
     VOCdevkit_path  = 'VOCdevkit'
 
-    image_ids       = open(os.path.join(VOCdevkit_path, "VOC2007-1/ImageSets/Segmentation/val.txt"),'r').read().splitlines() 
-    gt_dir          = os.path.join(VOCdevkit_path, "VOC2007-1/SegmentationClass/")
-    miou_out_path   = "miou_out_virtual"
+    image_ids       = open(os.path.join(VOCdevkit_path, "VOC2007/ImageSets/Segmentation/val.txt"),'r').read().splitlines() 
+    gt_dir          = os.path.join(VOCdevkit_path, "VOC2007/SegmentationClass/")
+    import time
+    from datetime import datetime
+
+    # 获取当前时间，格式为：年_月_日_时_分_秒
+    # 例如：2023_10_27_14_30_05
+    time_str = datetime.now().strftime('%Y_%m_%d_%H_%M_%S')
+
+    # 使用 f-string 进行拼接
+    miou_out_path = f"miou_out/miou_{time_str}"
+
+    # 或者如果你希望放在 logs 文件夹下
+    # miou_out_path = os.path.join("logs", f"miou_out_{time_str}")
+
+    print(f"本次运行的 mIoU 输出路径为: {miou_out_path}")
     pred_dir        = os.path.join(miou_out_path, 'detection-results')
 
     if miou_mode == 0 or miou_mode == 1:
@@ -51,11 +65,27 @@ if __name__ == "__main__":
 
         print("Get predict result.")
         for image_id in tqdm(image_ids):
-            image_path  = os.path.join(VOCdevkit_path, "VOC2007-1/JPEGImages/"+image_id+".jpg")
+            image_path  = os.path.join(VOCdevkit_path, "VOC2007/JPEGImages/"+image_id+".jpg")
             image       = Image.open(image_path)
             image       = unet.get_miou_png(image)
             image.save(os.path.join(pred_dir, image_id + ".png"))
         print("Get predict result done.")
+        
+        # --- 新增：调用混合可视化函数 ---
+        print("Generate overlap visualization...")
+        # 定义叠加图的保存路径
+        overlay_save_dir = os.path.join(miou_out_path, 'overlay_results')
+        
+        # 直接调用你的批量处理函数
+        # 注意：IMG_DIR 指向你的原图路径，MASK_DIR 指向刚才生成的预测图路径
+        batch_visualize(
+            img_folder   = os.path.join(VOCdevkit_path, "VOC2007/JPEGImages"), 
+            mask_folder  = pred_dir, 
+            save_dir     = overlay_save_dir, 
+            show         = False
+        )
+        print(f"Overlap visualization saved to: {overlay_save_dir}")
+        # ----------------------------------
 
     if miou_mode == 0 or miou_mode == 2:
         print("Get miou.")

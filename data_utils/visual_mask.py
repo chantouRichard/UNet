@@ -12,14 +12,14 @@ def visualize_segmentation(image_path, mask_path, save_dir=None, show=True, alph
     # 读取图像
     image = cv2.imread(str(image_path))
     if image is None:
-        print(f"警告: 无法读取图像 {image_path}")
+        # print(f"警告: 无法读取图像 {image_path}")
         return
     
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     mask = cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
     
     if mask is None:
-        print(f"警告: 无法读取掩码 {mask_path}")
+        # print(f"警告: 无法读取掩码 {mask_path}")
         return
 
     # 检查尺寸是否一致，不一致则缩放掩码（防止UNet输出尺寸偏移）
