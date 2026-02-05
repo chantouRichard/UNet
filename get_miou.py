@@ -88,7 +88,60 @@ if __name__ == "__main__":
         # ----------------------------------
 
     if miou_mode == 0 or miou_mode == 2:
-        print("Get miou.")
-        hist, IoUs, PA_Recall, Precision = compute_mIoU(gt_dir, pred_dir, image_ids, num_classes, name_classes)  # 执行计算mIoU的函数
-        print("Get miou done.")
+        print("Get metrics.")
+        # 1. 执行计算，获取混淆矩阵及基础指标
+        # 注意：确保你的 compute_mIoU 返回了 hist (混淆矩阵)
+        hist, IoUs, PA_Recall, Precision = compute_mIoU(gt_dir, pred_dir, image_ids, num_classes, name_classes)
+        
+        # 2. 从混淆矩阵中计算更多指标 (Sen, Spe, F1, Acc)
+        # 假设 hist 是 [num_classes, num_classes] 的混淆矩阵
+        # 针对分类任务，通常我们关注“绳索”(类别1) 的表现
+        
+        # 计算全局准确率 (Acc)
+        import numpy as np
+        Acc = np.diag(hist).sum() / hist.sum()
+        
+        # 针对每一类计算 Sen (Recall) 和 Spe
+        # Sen (Sensitivity) 其实就是 PA_Recall
+        Sen = PA_Recall 
+        
+        # 计算 Specificity (Spe)
+        # 对于二分类，背景的 Spe 就是 绳索的 Recall，反之亦然
+        # 这里展示通用的 Spe 计算逻辑
+        Spe = []
+        for i in range(num_classes):
+            tp = hist[i, i]
+            fp = hist[:, i].sum() - tp
+            fn = hist[i, :].sum() - tp
+            tn = hist.sum() - (tp + fp + fn)
+            Spe.append(tn / (tn + fp) if (tn + fp) != 0 else 0)
+        
+        # 计算 F1-Score
+        # F1 = 2 * (Prec * Rec) / (Prec + Rec)
+        F1 = []
+        for i in range(num_classes):
+            if (Precision[i] + PA_Recall[i]) != 0:
+                f1 = 2 * Precision[i] * PA_Recall[i] / (Precision[i] + PA_Recall[i])
+            else:
+                f1 = 0
+            F1.append(f1)
+
+        # 3. 打印并记录结果
+        print("Get metrics done.")
+        
+        # 保存到本地文件
+        with open(os.path.join(miou_out_path, "detailed_metrics.txt"), 'w') as f:
+            f.write(f"Evaluation Results (Time: {time_str})\n")
+            f.write("-" * 50 + "\n")
+            f.write(f"Overall Accuracy (Acc): {Acc * 100:.2f}%\n")
+            for i, class_name in enumerate(name_classes):
+                f.write(f"Class: {class_name}\n")
+                f.write(f"  IoU: {IoUs[i] * 100:.2f}%\n")
+                f.write(f"  Sen (Recall): {Sen[i] * 100:.2f}%\n")
+                f.write(f"  Spe: {Spe[i] * 100:.2f}%\n")
+                f.write(f"  F1-Score: {F1[i] * 100:.2f}%\n")
+                f.write("-" * 20 + "\n")
+
+        # 调用原有的展示函数
         show_results(miou_out_path, hist, IoUs, PA_Recall, Precision, name_classes)
+        print(f"Detailed metrics saved to: {os.path.join(miou_out_path, 'detailed_metrics.txt')}")
