@@ -1,6 +1,6 @@
 # --- 配置区 ---
 $CONDA_ENV_NAME = "unet-pytorch"  # 你的 conda 环境名称
-$WAIT_TIME = 21000               # 等待时间（秒）
+$WAIT_TIME = 14400               # 等待时间（秒）
 
 # 1. 等待虚拟数据训练结束
 Write-Host "开始等待虚拟训练结束，计时 6 小时..." -ForegroundColor Cyan
