@@ -557,7 +557,7 @@ if __name__ == "__main__":
         CBAM_WARMUP_EPOCHS = 3      # 前5epoch只训CBAM
         PARTIAL_UNFREEZE_EPOCHS = 7 # 5-20epoch部分解冻
         FULL_UNFREEZE_EPOCHS = 15    # 20-40epoch全部解冻
-        for epoch in range(Init_Epoch, UnFreeze_Epoch):
+        for epoch in range(Init_Epoch, FULL_UNFREEZE_EPOCHS):
             #---------------------------------------#
             #   如果模型有冻结学习部分
             #   则解冻，并设置参数
@@ -574,7 +574,7 @@ if __name__ == "__main__":
                 print("\n阶段2: 部分解冻VGG高层，联合训练")
                 model.set_backbone_partial_unfreeze()  # 部分解冻VGG
                 model.set_cbam_trainable(True)  # CBAM继续训练
-            elif epoch >= Freeze_Epoch and not UnFreeze_flag and Freeze_Train:
+            elif epoch >= PARTIAL_UNFREEZE_EPOCHS and not UnFreeze_flag and Freeze_Train:
                 print("\n阶段3: 全部解冻，整体微调")
                 model.unfreeze_backbone()  # 完全解冻VGG
                 model.set_cbam_trainable(True)  # CBAM继续训练
