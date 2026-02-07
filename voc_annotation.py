@@ -22,8 +22,13 @@ VOCdevkit_path      = 'VOCdevkit'
 def main():
     random.seed(0)
     print("Generate txt in ImageSets.")
-    segfilepath     = os.path.join(VOCdevkit_path, 'VOC2007\\SegmentationClass')
-    saveBasePath    = os.path.join(VOCdevkit_path, 'VOC2007\\ImageSets\\Segmentation')
+    from pathlib import Path
+    # 将基础路径转换为 Path 对象
+    voc_path = Path(VOCdevkit_path) / "VOC2007"
+
+    # 使用 / 操作符进行拼接（pathlib 会根据系统自动处理斜杠）
+    segfilepath  = voc_path / "SegmentationClass"
+    saveBasePath = voc_path / "ImageSets" / "Segmentation"
     
     temp_seg = os.listdir(segfilepath)
     total_seg = []

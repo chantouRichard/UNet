@@ -13,10 +13,10 @@ from PIL import Image
 
 # ==================== 配置区域 ====================
 # 源数据集目录
-SOURCE_DATASET_DIR = Path("VOCdevkit\\VOC2007-temp")
+SOURCE_DATASET_DIR = Path("VOCdevkit") / "VOC2007-temp"
 
 # 输出数据集目录
-OUTPUT_DATASET_DIR = Path("VOCdevkit\\VOC2007")
+OUTPUT_DATASET_DIR = Path("VOCdevkit") / "VOC2007"
 
 # 裁剪参数
 PATCH_SIZE = 1024  # 裁剪尺寸（方形）
