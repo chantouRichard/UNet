@@ -260,7 +260,7 @@ if __name__ == "__main__":
     #                   当使用SGD优化器时建议设置   Init_lr=1e-2
     #   Min_lr          模型的最小学习率，默认为最大学习率的0.01
     #------------------------------------------------------------------#
-    Init_lr             = 1e-5
+    Init_lr             = 1e-4
     Min_lr              = Init_lr * 0.01
     #------------------------------------------------------------------#
     #   optimizer_type  使用到的优化器种类，可选的有adam、sgd
@@ -375,7 +375,7 @@ if __name__ == "__main__":
             else:
                 convert_bn_to_gn(child)
     model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone)
-    convert_bn_to_gn(model) # 关键：模型定义完直接转
+    # convert_bn_to_gn(model) # 关键：模型定义完直接转
     print("\n直接转BatchNorm\n")
     model.train()
     if not pretrained:
@@ -555,8 +555,8 @@ if __name__ == "__main__":
         #   开始模型训练
         #---------------------------------------#
         CBAM_WARMUP_EPOCHS = 3      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 7 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 15    # 20-40epoch全部解冻
+        PARTIAL_UNFREEZE_EPOCHS = 10 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, FULL_UNFREEZE_EPOCHS):
             #---------------------------------------#
             #   如果模型有冻结学习部分

@@ -375,7 +375,7 @@ if __name__ == "__main__":
             else:
                 convert_bn_to_gn(child)
     model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone)
-    convert_bn_to_gn(model) # 关键：模型定义完直接转
+    # convert_bn_to_gn(model) # 关键：模型定义完直接转
     print("\n直接转BatchNorm\n")
     model.train()
     if not pretrained:
@@ -555,9 +555,9 @@ if __name__ == "__main__":
         #   开始模型训练
         #---------------------------------------#
         CBAM_WARMUP_EPOCHS = 5      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 15 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
-        for epoch in range(Init_Epoch, UnFreeze_Epoch):
+        PARTIAL_UNFREEZE_EPOCHS = 20 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 50    # 20-40epoch全部解冻
+        for epoch in range(Init_Epoch, FULL_UNFREEZE_EPOCHS):
             #---------------------------------------#
             #   如果模型有冻结学习部分
             #   则解冻，并设置参数
@@ -574,7 +574,7 @@ if __name__ == "__main__":
                 print("\n阶段2: 部分解冻VGG高层，联合训练")
                 model.set_backbone_partial_unfreeze()  # 部分解冻VGG
                 model.set_cbam_trainable(True)  # CBAM继续训练
-            elif epoch >= Freeze_Epoch and not UnFreeze_flag and Freeze_Train:
+            elif epoch >= PARTIAL_UNFREEZE_EPOCHS and not UnFreeze_flag and Freeze_Train:
                 print("\n阶段3: 全部解冻，整体微调")
                 model.unfreeze_backbone()  # 完全解冻VGG
                 model.set_cbam_trainable(True)  # CBAM继续训练
