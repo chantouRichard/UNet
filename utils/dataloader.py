@@ -8,6 +8,10 @@ from torch.utils.data.dataset import Dataset
 
 from utils.utils import cvtColor, preprocess_input
 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils.vesselness2d import vesselness2d
+
 
 class UnetDataset(Dataset):
     def __init__(self, annotation_lines, input_shape, num_classes, train, dataset_path):
@@ -36,7 +40,41 @@ class UnetDataset(Dataset):
         #-------------------------------#
         jpg, png    = self.get_random_data(jpg, png, self.input_shape, random = self.train)
 
-        jpg         = np.transpose(preprocess_input(np.array(jpg, np.float64)), [2,0,1])
+        #-------------------------------#
+        #   多通道
+        #-------------------------------#
+        # 先转numpy
+        img = np.array(jpg, np.float32)
+
+        # 转灰度（Frangi需要灰度）
+        gray = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_RGB2GRAY)
+        gray = gray.astype(np.float32)
+
+        # 归一化到0-1
+        gray = gray - gray.min()
+        gray = gray / (gray.max() + 1e-6)
+
+        # -------- 计算 vesselness --------
+        sigma = [0.5, 1, 1.5, 2]
+        spacing = [1, 1]
+        tau = 2
+
+        vessel = vesselness2d(gray, sigma, spacing, tau)
+        vessel = vessel.vesselness2d().astype(np.float32)
+
+        # 归一化
+        vessel = vessel - vessel.min()
+        vessel = vessel / (vessel.max() + 1e-6)
+
+        # -------- 原图预处理 --------
+        img = preprocess_input(img)
+        img = np.transpose(img, [2, 0, 1])   # 3,H,W
+
+        # vessel 扩维
+        vessel = np.expand_dims(vessel, 0)   # 1,H,W
+
+        # 拼接成 4 通道
+        jpg = np.concatenate([img, vessel], axis=0)  # 4,H,W
         png         = np.array(png)
         png[png >= self.num_classes] = self.num_classes
         #-------------------------------------------------------#

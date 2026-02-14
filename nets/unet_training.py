@@ -75,8 +75,22 @@ def soft_skel(img, iter_):
     return skel
 
 def CLDice_loss(pred, target, iter_=15, smooth=1e-5):
+
+    # 修正 HWC
+    if target.dim() == 4 and target.shape[-1] == 3:
+        target = target.permute(0, 3, 1, 2)
+
+    if target.dim() == 3:
+        target = target.unsqueeze(1)
+
+    if target.size(1) > 1:
+        target = target[:, 0:1, :, :]
+
+    if pred.size(1) > 1:
+        pred = pred[:, 1:2, :, :]
+
     skel_pred = soft_skel(pred, iter_)
-    skel_gt = soft_skel(target, iter_)
+    skel_gt   = soft_skel(target, iter_)
 
     tprec = (skel_pred * target).sum() / (skel_pred.sum() + smooth)
     trec  = (skel_gt   * pred  ).sum() / (skel_gt.sum() + smooth)

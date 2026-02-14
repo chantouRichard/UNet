@@ -49,7 +49,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
                 main_dice = Dice_loss(outputs, labels)
                 loss      = loss + main_dice
                 
-            if cldice_loss:
+            if cldice_loss and epoch > 10:
                 cldice = CLDice_loss(outputs, labels)
                 loss      = loss + cldice
 
