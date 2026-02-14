@@ -1,14 +1,14 @@
 import os
 
 import torch
-from nets.unet_training import CE_Loss, Dice_loss, Focal_Loss
+from nets.unet_training import CE_Loss, Dice_loss, Focal_Loss, CLDice_loss
 from tqdm import tqdm
 
 from utils.utils import get_lr
 from utils.utils_metrics import f_score
 
 
-def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, Epoch, cuda, dice_loss, focal_loss, cls_weights, num_classes, fp16, scaler, save_period, save_dir, local_rank=0):
+def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, Epoch, cuda, cldice_loss, dice_loss, focal_loss, cls_weights, num_classes, fp16, scaler, save_period, save_dir, local_rank=0):
     total_loss      = 0
     total_f_score   = 0
 
@@ -48,6 +48,10 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             if dice_loss:
                 main_dice = Dice_loss(outputs, labels)
                 loss      = loss + main_dice
+                
+            if cldice_loss:
+                cldice = CLDice_loss(outputs, labels)
+                loss      = loss + cldice
 
             with torch.no_grad():
                 #-------------------------------#

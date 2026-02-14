@@ -55,6 +55,35 @@ def Dice_loss(inputs, target, beta=1, smooth = 1e-5):
     dice_loss = 1 - torch.mean(score)
     return dice_loss
 
+def soft_erode(img):
+    p1 = -F.max_pool2d(-img, (3,1), stride=1, padding=(1,0))
+    p2 = -F.max_pool2d(-img, (1,3), stride=1, padding=(0,1))
+    return torch.min(p1, p2)
+
+def soft_dilate(img):
+    return F.max_pool2d(img, (3,3), stride=1, padding=1)
+
+def soft_skel(img, iter_):
+    img1 = img
+    skel = torch.zeros_like(img)
+    for _ in range(iter_):
+        img_erode = soft_erode(img1)
+        img_open = soft_dilate(img_erode)
+        delta = F.relu(img1 - img_open)
+        skel = skel + F.relu(delta - skel * delta)
+        img1 = img_erode
+    return skel
+
+def CLDice_loss(pred, target, iter_=15, smooth=1e-5):
+    skel_pred = soft_skel(pred, iter_)
+    skel_gt = soft_skel(target, iter_)
+
+    tprec = (skel_pred * target).sum() / (skel_pred.sum() + smooth)
+    trec  = (skel_gt   * pred  ).sum() / (skel_gt.sum() + smooth)
+
+    cl = (2 * tprec * trec) / (tprec + trec + smooth)
+    return 1 - cl
+
 def weights_init(net, init_type='normal', init_gain=0.02):
     def init_func(m):
         classname = m.__class__.__name__

@@ -306,6 +306,7 @@ if __name__ == "__main__":
     #   种类多（十几类）时，如果batch_size比较大（10以上），那么设置为True
     #   种类多（十几类）时，如果batch_size比较小（10以下），那么设置为False
     #------------------------------------------------------------------#
+    cldice_loss     = True
     dice_loss       = True
     #------------------------------------------------------------------#
     #   是否使用focal loss来防止正负样本不平衡
@@ -619,7 +620,7 @@ if __name__ == "__main__":
             set_optimizer_lr(optimizer, lr_scheduler_func, epoch)
 
             fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch, 
-                    epoch_step, epoch_step_val, gen, gen_val, UnFreeze_Epoch, Cuda, dice_loss, focal_loss, cls_weights, num_classes, fp16, scaler, save_period, save_dir, local_rank)
+                    epoch_step, epoch_step_val, gen, gen_val, UnFreeze_Epoch, Cuda, cldice_loss, dice_loss, focal_loss, cls_weights, num_classes, fp16, scaler, save_period, save_dir, local_rank)
 
             # 每10个epoch可视化一次
             # 在调用 visualize_predictions 前添加调试代码
