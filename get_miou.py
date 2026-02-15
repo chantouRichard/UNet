@@ -91,7 +91,7 @@ if __name__ == "__main__":
         print("Get metrics.")
         # 1. 执行计算，获取混淆矩阵及基础指标
         # 注意：确保你的 compute_mIoU 返回了 hist (混淆矩阵)
-        hist, IoUs, PA_Recall, Precision = compute_mIoU(gt_dir, pred_dir, image_ids, num_classes, name_classes)
+        hist, IoUs, PA_Recall, Precision, iou_mean, iou_var, cldice_mean, cldice_var = compute_mIoU(gt_dir, pred_dir, image_ids, num_classes, name_classes)
         
         # 2. 从混淆矩阵中计算更多指标 (Sen, Spe, F1, Acc)
         # 假设 hist 是 [num_classes, num_classes] 的混淆矩阵
@@ -141,6 +141,10 @@ if __name__ == "__main__":
                 f.write(f"  Spe: {Spe[i] * 100:.2f}%\n")
                 f.write(f"  F1-Score: {F1[i] * 100:.2f}%\n")
                 f.write("-" * 20 + "\n")
+            
+            f.write(f"Rope mean var: {iou_var * 100:.2f}%\n")
+            f.write(f"Rope cldice_mean: {cldice_mean * 100:.2f}%\n")
+            f.write(f"Rope cldice_var: {cldice_mean * 100:.2f}%\n")
 
         # 调用原有的展示函数
         show_results(miou_out_path, hist, IoUs, PA_Recall, Precision, name_classes)

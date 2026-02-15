@@ -54,7 +54,11 @@ def per_class_Precision(hist):
 def per_Accuracy(hist):
     return np.sum(np.diag(hist)) / np.maximum(np.sum(hist), 1) 
 
+from utils.cldice import soft_cldice, soft_dice, soft_dice_cldice
 def compute_mIoU(gt_dir, pred_dir, png_name_list, num_classes, name_classes=None):  
+    iou_list = []
+    cldice_list = []
+    dice_cldice_fn = soft_dice_cldice(iter_=3, alpha=0.5)
     print('Num classes', num_classes)  
     #-----------------------------------------#
     #   创建一个全是0的矩阵，是一个混淆矩阵
@@ -93,6 +97,14 @@ def compute_mIoU(gt_dir, pred_dir, png_name_list, num_classes, name_classes=None
         #   对一张图片计算21×21的hist矩阵，并累加
         #------------------------------------------------#
         hist += fast_hist(label.flatten(), pred.flatten(), num_classes)  
+        # 计算单张图的混淆矩阵
+        hist_single = fast_hist(label.flatten(), pred.flatten(), num_classes)
+
+        # 计算单张图 IoU
+        IoU_single = per_class_iu(hist_single)
+
+        # 如果是二分类，只取前景类别（比如 index=1）
+        iou_list.append(IoU_single[1])
         # 每计算10张就输出一下目前已计算的图片中所有类别平均的mIoU值
         if name_classes is not None and ind > 0 and ind % 10 == 0: 
             print('{:d} / {:d}: mIou-{:0.2f}%; mPA-{:0.2f}%; Accuracy-{:0.2f}%'.format(
@@ -103,12 +115,38 @@ def compute_mIoU(gt_dir, pred_dir, png_name_list, num_classes, name_classes=None
                     100 * per_Accuracy(hist)
                 )
             )
+        
+        # 二值化（假设前景类别=1）
+        label_bin = (label == 1).astype(np.float32)
+        pred_bin  = (pred  == 1).astype(np.float32)
+
+        # 转 tensor
+        label_tensor = torch.from_numpy(label_bin).unsqueeze(0).unsqueeze(0).float()
+        pred_tensor  = torch.from_numpy(pred_bin).unsqueeze(0).unsqueeze(0).float()
+
+        # 放到 GPU（如果需要）
+        label_tensor = label_tensor.cuda()
+        pred_tensor  = pred_tensor.cuda()
+
+        cl = dice_cldice_fn(label_tensor, pred_tensor)
+
+        cldice_list.append(cl.item())
     #------------------------------------------------#
     #   计算所有验证集图片的逐类别mIoU值
     #------------------------------------------------#
     IoUs        = per_class_iu(hist)
     PA_Recall   = per_class_PA_Recall(hist)
     Precision   = per_class_Precision(hist)
+    iou_mean = np.mean(iou_list)
+    iou_var  = np.var(iou_list)
+
+    cldice_mean = np.mean(cldice_list)
+    cldice_var  = np.var(cldice_list)
+
+    print("Foreground IoU mean:", round(iou_mean * 100, 2))
+    print("Foreground IoU var:", round(iou_var, 6))
+    print("CLDice mean:", round(cldice_mean, 4))
+    print("CLDice var:", round(cldice_var, 6))
     #------------------------------------------------#
     #   逐类别输出一下mIoU值
     #------------------------------------------------#
@@ -121,7 +159,7 @@ def compute_mIoU(gt_dir, pred_dir, png_name_list, num_classes, name_classes=None
     #   在所有验证集图像上求所有类别平均的mIoU值，计算时忽略NaN值
     #-----------------------------------------------------------------#
     print('===> mIoU: ' + str(round(np.nanmean(IoUs) * 100, 2)) + '; mPA: ' + str(round(np.nanmean(PA_Recall) * 100, 2)) + '; Accuracy: ' + str(round(per_Accuracy(hist) * 100, 2)))  
-    return np.array(hist, int), IoUs, PA_Recall, Precision
+    return np.array(hist, int), IoUs, PA_Recall, Precision, iou_mean, iou_var, cldice_mean, cldice_var
 
 def adjust_axes(r, t, fig, axes):
     bb                  = t.get_window_extent(renderer=r)

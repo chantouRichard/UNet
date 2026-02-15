@@ -7,6 +7,7 @@ from tqdm import tqdm
 from utils.utils import get_lr
 from utils.utils_metrics import f_score
 
+from utils.cldice import soft_cldice, soft_dice, soft_dice_cldice
 
 def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, epoch, epoch_step, epoch_step_val, gen, gen_val, Epoch, cuda, cldice_loss, dice_loss, focal_loss, cls_weights, num_classes, fp16, scaler, save_period, save_dir, local_rank=0):
     total_loss      = 0
@@ -14,6 +15,8 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
 
     val_loss        = 0
     val_f_score     = 0
+    
+    dice_cldice_fn = soft_dice_cldice(iter_=3, alpha=0.5)
 
     if local_rank == 0:
         print('Start Train')
@@ -45,13 +48,16 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             else:
                 loss = CE_Loss(outputs, pngs, weights, num_classes = num_classes)
 
-            if dice_loss:
+            # if dice_loss:
+            #     main_dice = Dice_loss(outputs, labels)
+            #     loss      = loss + main_dice
+                
+            if dice_loss and cldice_loss and epoch > 10:
+                cldice = dice_cldice_fn(labels, outputs)
+                loss      = loss + cldice
+            else:
                 main_dice = Dice_loss(outputs, labels)
                 loss      = loss + main_dice
-                
-            if cldice_loss and epoch > 10:
-                cldice = CLDice_loss(outputs, labels)
-                loss      = loss + cldice
 
             with torch.no_grad():
                 #-------------------------------#
