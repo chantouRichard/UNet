@@ -12,6 +12,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils.vesselness2d import vesselness2d
 
+from config import Config
 
 class UnetDataset(Dataset):
     def __init__(self, annotation_lines, input_shape, num_classes, train, dataset_path):
@@ -74,7 +75,8 @@ class UnetDataset(Dataset):
         vessel = np.expand_dims(vessel, 0)   # 1,H,W
 
         # 拼接成 4 通道
-        jpg = np.concatenate([img, vessel], axis=0)  # 4,H,W
+        # jpg = np.concatenate([img, vessel], axis=0)  # 4,H,W
+        jpg = img
         png         = np.array(png)
         png[png >= self.num_classes] = self.num_classes
         #-------------------------------------------------------#

@@ -392,14 +392,49 @@ if __name__ == "__main__":
         #   根据预训练权重的Key和模型的Key进行加载
         #------------------------------------------------------#
         model_dict      = model.state_dict()
-        pretrained_dict = torch.load(model_path, map_location = device)
+        pretrained_dict = torch.load(model_path, map_location=device)
+
         load_key, no_load_key, temp_dict = [], [], {}
+
         for k, v in pretrained_dict.items():
-            if k in model_dict.keys() and np.shape(model_dict[k]) == np.shape(v):
-                temp_dict[k] = v
-                load_key.append(k)
+
+            # ================================
+            # 1️⃣  特殊处理第一层 3->4 通道
+            # ================================
+            if k in model_dict.keys():
+
+                # 如果是第一层卷积，并且是 3->4 通道
+                if (
+                    len(v.shape) == 4 and
+                    model_dict[k].shape[1] == 4 and
+                    v.shape[1] == 3
+                ):
+                    print(f"Expanding first conv layer: {k} from 3 -> 4 channels")
+
+                    new_weight = model_dict[k]
+
+                    # 复制前3通道
+                    new_weight[:, :3, :, :] = v
+
+                    # 第4通道初始化为0
+                    new_weight[:, 3:4, :, :] = 0
+
+                    temp_dict[k] = new_weight
+                    load_key.append(k)
+
+                # ================================
+                # 2️⃣  正常shape匹配
+                # ================================
+                elif np.shape(model_dict[k]) == np.shape(v):
+                    temp_dict[k] = v
+                    load_key.append(k)
+
+                else:
+                    no_load_key.append(k)
+
             else:
                 no_load_key.append(k)
+
         model_dict.update(temp_dict)
         model.load_state_dict(model_dict)
         #------------------------------------------------------#

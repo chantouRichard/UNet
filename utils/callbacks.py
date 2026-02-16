@@ -88,6 +88,12 @@ class LossHistory():
         plt.cla()
         plt.close("all")
 
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils.vesselness2d import vesselness2d
+
+from config import Config
+
 class EvalCallback():
     def __init__(self, net, input_shape, num_classes, image_ids, dataset_path, log_dir, cuda, \
             miou_out_path=".temp_miou_out", eval_flag=True, period=1):
@@ -128,7 +134,50 @@ class EvalCallback():
         #---------------------------------------------------------#
         #   添加上batch_size维度
         #---------------------------------------------------------#
-        image_data  = np.expand_dims(np.transpose(preprocess_input(np.array(image_data, np.float32)), (2, 0, 1)), 0)
+        # ======== 转 numpy ========
+        img = np.array(image_data, np.float32)
+
+        # ==============================
+        # 是否使用 Hessian
+        # ==============================
+
+        if Config.USE_HESSIAN:
+            gray = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_RGB2GRAY)
+            gray = gray.astype(np.float32)
+
+            gray = gray - gray.min()
+            gray = gray / (gray.max() + 1e-6)
+
+            vessel = vesselness2d(
+                gray,
+                Config.SIGMA,
+                Config.SPACING,
+                Config.TAU
+            )
+            vessel = vessel.vesselness2d().astype(np.float32)
+
+            vessel = vessel - vessel.min()
+            vessel = vessel / (vessel.max() + 1e-6)
+
+        else:
+            h, w, _ = img.shape
+            vessel = np.zeros((h, w), dtype=np.float32)
+
+        # ==============================
+        # 原图预处理
+        # ==============================
+
+        img = preprocess_input(img)
+        img = np.transpose(img, [2, 0, 1])  # 3,H,W
+
+        vessel = np.expand_dims(vessel, 0)  # 1,H,W
+
+        image_data = np.concatenate([img, vessel], axis=0)
+        image_data = np.expand_dims(image_data, 0)
+
+        # ==============================
+        # 推理
+        # ==============================
 
         with torch.no_grad():
             images = torch.from_numpy(image_data)

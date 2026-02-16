@@ -34,6 +34,7 @@ class Unet(nn.Module):
             raise ValueError('Unsupported backbone - `{}`, Use vgg, resnet50.'.format(backbone))
         out_filters = [64, 128, 256, 512]
 
+        self.alpha = nn.Parameter(torch.tensor(0.5))
         # upsampling
         # 64,64,512
         self.up_concat4 = unetUp(in_filters[3], out_filters[3])
@@ -59,12 +60,23 @@ class Unet(nn.Module):
 
         self.backbone = backbone
 
-    def forward(self, inputs):
+    def forward(self, inputs, vessel=None):
         if self.backbone == "vgg":
             [feat1, feat2, feat3, feat4, feat5] = self.vgg.forward(inputs)
         elif self.backbone == "resnet50":
             [feat1, feat2, feat3, feat4, feat5] = self.resnet.forward(inputs)
 
+        # ---------------------------
+        # 在这里加入 vessel 调制
+        # ---------------------------
+        if vessel is not None:
+            # vessel shape: (B,1,H,W)
+            # feat1 shape:  (B,C,H,W)
+            vessel = torch.nn.functional.interpolate(
+                vessel, size=feat1.shape[2:], mode='bilinear', align_corners=False
+            )
+            feat1 = feat1 * (1 + self.alpha * vessel)
+            
         up4 = self.up_concat4(feat4, feat5)
         up3 = self.up_concat3(feat3, up4)
         up2 = self.up_concat2(feat2, up3)

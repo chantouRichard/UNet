@@ -25,7 +25,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
     for iteration, batch in enumerate(gen):
         if iteration >= epoch_step: 
             break
-        imgs, pngs, labels = batch
+        imgs, vessels, pngs, labels = batch
         with torch.no_grad():
             weights = torch.from_numpy(cls_weights)
             if cuda:
@@ -39,7 +39,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             #----------------------#
             #   前向传播
             #----------------------#
-            outputs = model_train(imgs)
+            outputs = model_train(imgs, vessels)
             #----------------------#
             #   损失计算
             #----------------------#
@@ -78,7 +78,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
                 #----------------------#
                 #   前向传播
                 #----------------------#
-                outputs = model_train(imgs)
+                outputs = model_train(imgs, vessels)
                 #----------------------#
                 #   损失计算
                 #----------------------#
@@ -123,7 +123,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
     for iteration, batch in enumerate(gen_val):
         if iteration >= epoch_step_val:
             break
-        imgs, pngs, labels = batch
+        imgs, vessels, pngs, labels = batch
         with torch.no_grad():
             weights = torch.from_numpy(cls_weights)
             if cuda:
@@ -135,7 +135,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             #----------------------#
             #   前向传播
             #----------------------#
-            outputs = model_train(imgs)
+            outputs = model_train(imgs, vessels)
             #----------------------#
             #   损失计算
             #----------------------#
@@ -192,7 +192,7 @@ def fit_one_epoch_no_val(model_train, model, loss_history, optimizer, epoch, epo
     for iteration, batch in enumerate(gen):
         if iteration >= epoch_step: 
             break
-        imgs, pngs, labels = batch
+        imgs, vessels, pngs, labels = batch
         with torch.no_grad():
             weights = torch.from_numpy(cls_weights)
             if cuda:
@@ -206,7 +206,7 @@ def fit_one_epoch_no_val(model_train, model, loss_history, optimizer, epoch, epo
             #----------------------#
             #   前向传播
             #----------------------#
-            outputs = model_train(imgs)
+            outputs = model_train(imgs, vessels)
             #----------------------#
             #   损失计算
             #----------------------#
@@ -233,7 +233,7 @@ def fit_one_epoch_no_val(model_train, model, loss_history, optimizer, epoch, epo
                 #----------------------#
                 #   前向传播
                 #----------------------#
-                outputs = model_train(imgs)
+                outputs = model_train(imgs, vessels)
                 #----------------------#
                 #   损失计算
                 #----------------------#
