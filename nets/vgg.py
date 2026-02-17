@@ -50,34 +50,6 @@ class VGGWithCBAM(nn.Module):
         super(VGGWithCBAM, self).__init__()
         self.features = features
         
-        #-----------------------------#
-        # 多通道输入Hession矩阵
-        #-----------------------------#
-        # 修改第一层输入通道数为4
-        old_conv = self.features[0]
-        new_conv = nn.Conv2d(
-            in_channels=4,
-            out_channels=old_conv.out_channels,
-            kernel_size=old_conv.kernel_size,
-            stride=old_conv.stride,
-            padding=old_conv.padding,
-            bias=(old_conv.bias is not None)
-        )
-
-        # 复制原来的3通道权重
-        new_conv.weight.data[:, :3, :, :] = old_conv.weight.data
-
-        # 第4通道用平均值初始化（关键）
-        new_conv.weight.data[:, 3:4, :, :] = \
-            old_conv.weight.data.mean(dim=1, keepdim=True)
-
-        # bias复制
-        if old_conv.bias is not None:
-            new_conv.bias.data = old_conv.bias.data
-
-        # 替换
-        self.features[0] = new_conv
-        
         # 在5个下采样阶段后添加CBAM注意力
         self.cbam1 = CBAM(channel=64)    # 对应feat1的输出通道
         self.cbam2 = CBAM(channel=128)   # 对应feat2的输出通道  

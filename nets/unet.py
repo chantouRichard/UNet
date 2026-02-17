@@ -75,7 +75,7 @@ class Unet(nn.Module):
             vessel = torch.nn.functional.interpolate(
                 vessel, size=feat1.shape[2:], mode='bilinear', align_corners=False
             )
-            feat1 = feat1 * (1 + self.alpha * vessel)
+            feat1 = feat1 * (1 + 0 * vessel)
             
         up4 = self.up_concat4(feat4, feat5)
         up3 = self.up_concat3(feat3, up4)

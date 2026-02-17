@@ -41,7 +41,6 @@ import matplotlib.pyplot as plt
 
 
 def visualize_predictions(model, dataloader, epoch, num_samples=2, save_dir='logs/predictions/'):
-    """可视化预测结果"""
     import os
     os.makedirs(save_dir, exist_ok=True)
 
@@ -51,56 +50,55 @@ def visualize_predictions(model, dataloader, epoch, num_samples=2, save_dir='log
             if i >= num_samples:
                 break
 
-            # 你的数据格式是三元组: (images, masks, extra_info)
-            images = data[0]  # 图像 tensor
-            masks = data[1]  # 掩码 tensor
-            # data[2] 是额外信息，这里不需要
+            # 现在是四元组
+            images = data[0]
+            vessels = data[1]
+            masks = data[2]     # 真实 mask 是第三个
+            # data[3] 是 one-hot，不用
 
-            # 确保数据在正确的设备上
             if torch.cuda.is_available():
                 images = images.cuda()
+                vessels = vessels.cuda()
 
-            # 预测（只使用前两个通道）
-            outputs = model(images)
+            # forward 需要两个输入
+            outputs = model(images, vessels)
             preds = torch.argmax(outputs, dim=1).cpu().numpy()
 
-            # 获取单个样本
-            # 注意：图像是 [C, H, W] 格式，需要转为 [H, W, C]
+            # 取第一个样本
             img_np = images[0].permute(1, 2, 0).cpu().numpy()
             mask_np = masks[0].cpu().numpy()
             pred_np = preds[0]
 
-            # 图像可能需要反归一化
-            # 如果你的图像是归一化到[0,1]的，可以跳过
-            # 如果归一化到[-1,1]，需要转换：
-            if img_np.min() < 0:
-                img_np = (img_np + 1) / 2  # 从[-1,1]转到[0,1]
-            elif img_np.max() <= 1:
-                img_np = img_np  # 已经是[0,1]
-            else:
-                img_np = img_np.astype(np.uint8)  # 可能是0-255
+            # 如果 mask 是 (1,H,W)，压缩
+            if mask_np.ndim == 3:
+                mask_np = mask_np.squeeze()
 
-            # 可视化
+            # 反归一化图像
+            if img_np.min() < 0:
+                img_np = (img_np + 1) / 2
+            elif img_np.max() <= 1:
+                img_np = img_np
+            else:
+                img_np = img_np.astype(np.uint8)
+
             fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
-            # 原图
             axes[0].imshow(img_np)
-            axes[0].set_title(f'Original Image\n{img_np.shape}')
+            axes[0].set_title('Original Image')
             axes[0].axis('off')
 
-            # 真实掩码
-            axes[1].imshow(mask_np, cmap='jet', vmin=0, vmax=num_classes - 1)
+            axes[1].imshow(mask_np, cmap='jet')
             axes[1].set_title(f'Ground Truth\nClasses: {np.unique(mask_np)}')
             axes[1].axis('off')
 
-            # 预测结果
-            axes[2].imshow(pred_np, cmap='jet', vmin=0, vmax=num_classes - 1)
+            axes[2].imshow(pred_np, cmap='jet')
             axes[2].set_title(f'Prediction\nClasses: {np.unique(pred_np)}')
             axes[2].axis('off')
 
             plt.suptitle(f'Epoch {epoch} - Sample {i + 1}')
             plt.tight_layout()
-            plt.savefig(f'{save_dir}epoch_{epoch}_sample_{i}.png', dpi=150, bbox_inches='tight')
+            plt.savefig(f'{save_dir}epoch_{epoch}_sample_{i}.png',
+                        dpi=150, bbox_inches='tight')
             plt.close()
 
     model.train()

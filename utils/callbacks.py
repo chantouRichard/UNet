@@ -172,7 +172,8 @@ class EvalCallback():
 
         vessel = np.expand_dims(vessel, 0)  # 1,H,W
 
-        image_data = np.concatenate([img, vessel], axis=0)
+        # image_data = np.concatenate([img, vessel], axis=0)
+        image_data = img
         image_data = np.expand_dims(image_data, 0)
 
         # ==============================

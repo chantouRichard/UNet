@@ -41,12 +41,7 @@ import matplotlib.pyplot as plt
 
 
 def visualize_predictions(model, dataloader, epoch, num_samples=2, save_dir='logs/predictions/'):
-    """可视化预测结果，包含 MDANet 侧边分支"""
     import os
-    import torch.nn.functional as F
-    import numpy as np
-    import matplotlib.pyplot as plt
-    
     os.makedirs(save_dir, exist_ok=True)
 
     model.eval()
@@ -55,64 +50,55 @@ def visualize_predictions(model, dataloader, epoch, num_samples=2, save_dir='log
             if i >= num_samples:
                 break
 
+            # 现在是四元组
             images = data[0]
-            masks = data[1]
+            vessels = data[1]
+            masks = data[2]     # 真实 mask 是第三个
+            # data[3] 是 one-hot，不用
 
             if torch.cuda.is_available():
                 images = images.cuda()
+                vessels = vessels.cuda()
 
-            # 1. 获取模型输出
-            outputs = model(images)
-            
-            # 准备一个列表来存储所有要显示的预测图
-            display_preds = []
-            
-            if isinstance(outputs, (tuple, list)):
-                # 如果是 MDANet，outputs 包含 [side1, side2, side3, side4, final]
-                for out_tensor in outputs:
-                    # 对每个分支进行 argmax
-                    p = torch.argmax(out_tensor, dim=1)[0].cpu().numpy()
-                    display_preds.append(p)
-                titles = ['Side 1', 'Side 2', 'Side 3', 'Side 4', 'Final Prediction']
-            else:
-                # 普通模型
-                p = torch.argmax(outputs, dim=1)[0].cpu().numpy()
-                display_preds.append(p)
-                titles = ['Prediction']
+            # forward 需要两个输入
+            outputs = model(images, vessels)
+            preds = torch.argmax(outputs, dim=1).cpu().numpy()
 
-            # 2. 图像预处理 (原图)
+            # 取第一个样本
             img_np = images[0].permute(1, 2, 0).cpu().numpy()
+            mask_np = masks[0].cpu().numpy()
+            pred_np = preds[0]
+
+            # 如果 mask 是 (1,H,W)，压缩
+            if mask_np.ndim == 3:
+                mask_np = mask_np.squeeze()
+
+            # 反归一化图像
             if img_np.min() < 0:
                 img_np = (img_np + 1) / 2
-            mask_np = masks[0].cpu().numpy()
+            elif img_np.max() <= 1:
+                img_np = img_np
+            else:
+                img_np = img_np.astype(np.uint8)
 
-            # 3. 动态计算子图数量
-            # 总列数 = 原图 + 真值 + 预测分支数
-            num_cols = 2 + len(display_preds)
-            fig, axes = plt.subplots(1, num_cols, figsize=(num_cols * 4, 5))
+            fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
-            # 第一张：原图
             axes[0].imshow(img_np)
             axes[0].set_title('Original Image')
             axes[0].axis('off')
 
-            # 第二张：真值 (GT)
-            axes[1].imshow(mask_np, cmap='jet', vmin=0, vmax=1)
-            axes[1].set_title('Ground Truth')
+            axes[1].imshow(mask_np, cmap='jet')
+            axes[1].set_title(f'Ground Truth\nClasses: {np.unique(mask_np)}')
             axes[1].axis('off')
 
-            # 后续：各分支预测图
-            for idx, pred in enumerate(display_preds):
-                ax_idx = idx + 2
-                axes[ax_idx].imshow(pred, cmap='jet', vmin=0, vmax=1)
-                axes[ax_idx].set_title(titles[idx])
-                axes[ax_idx].axis('off')
-                # 额外打印一下每个分支预测出的类别，辅助调试
-                print(f"Epoch {epoch} Sample {i} {titles[idx]} classes: {np.unique(pred)}")
+            axes[2].imshow(pred_np, cmap='jet')
+            axes[2].set_title(f'Prediction\nClasses: {np.unique(pred_np)}')
+            axes[2].axis('off')
 
-            plt.suptitle(f'Epoch {epoch} - Sample {i + 1} - Multi-Scale Analysis')
+            plt.suptitle(f'Epoch {epoch} - Sample {i + 1}')
             plt.tight_layout()
-            plt.savefig(f'{save_dir}epoch_{epoch}_sample_{i}_detailed.png', dpi=150, bbox_inches='tight')
+            plt.savefig(f'{save_dir}epoch_{epoch}_sample_{i}.png',
+                        dpi=150, bbox_inches='tight')
             plt.close()
 
     model.train()

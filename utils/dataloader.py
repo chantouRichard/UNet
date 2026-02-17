@@ -40,7 +40,7 @@ class UnetDataset(Dataset):
         #   数据增强
         #-------------------------------#
         jpg, png    = self.get_random_data(jpg, png, self.input_shape, random = self.train)
-
+        
         #-------------------------------#
         #   多通道
         #-------------------------------#
@@ -87,7 +87,7 @@ class UnetDataset(Dataset):
         seg_labels  = np.eye(self.num_classes + 1)[png.reshape([-1])]
         seg_labels  = seg_labels.reshape((int(self.input_shape[0]), int(self.input_shape[1]), self.num_classes + 1))
 
-        return jpg, png, seg_labels
+        return jpg, vessel, png, seg_labels
 
     def rand(self, a=0, b=1):
         return np.random.rand() * (b - a) + a
@@ -176,14 +176,20 @@ class UnetDataset(Dataset):
 
 # DataLoader中collate_fn使用
 def unet_dataset_collate(batch):
-    images      = []
-    pngs        = []
-    seg_labels  = []
-    for img, png, labels in batch:
+    images = []
+    vessels = []
+    pngs = []
+    seg_labels = []
+
+    for img, vessel, png, labels in batch:
         images.append(img)
+        vessels.append(vessel)
         pngs.append(png)
         seg_labels.append(labels)
-    images      = torch.from_numpy(np.array(images)).type(torch.FloatTensor)
-    pngs        = torch.from_numpy(np.array(pngs)).long()
-    seg_labels  = torch.from_numpy(np.array(seg_labels)).type(torch.FloatTensor)
-    return images, pngs, seg_labels
+
+    images = torch.from_numpy(np.array(images)).type(torch.FloatTensor)
+    vessels = torch.from_numpy(np.array(vessels)).type(torch.FloatTensor)
+    pngs = torch.from_numpy(np.array(pngs)).long()
+    seg_labels = torch.from_numpy(np.array(seg_labels)).type(torch.FloatTensor)
+
+    return images, vessels, pngs, seg_labels
