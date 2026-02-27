@@ -144,3 +144,8 @@ img/
 miou_out/
 miou_out_virtual/
 miou_out_real/
+test_JPEG/
+test_JPEG_out/
+
+Vessel_result/
+Hessian_Analysis_Visual/

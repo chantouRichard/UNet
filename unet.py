@@ -26,7 +26,7 @@ class Unet(object):
         #   训练好后logs文件夹下存在多个权值文件，选择验证集损失较低的即可。
         #   验证集损失较低不代表miou较高，仅代表该权值在验证集上泛化性能较好。
         #-------------------------------------------------------------------#
-        "model_path"    : 'miou_out/miou_2026_02_17_11_55_16-HessionPlus/best_epoch_weights.pth',
+        "model_path"    : 'miou_out/miou_2026_02_17_16_54_16-HessionPlus-1/best_epoch_weights.pth',
         #--------------------------------#
         #   所需要区分的类的个数+1
         #--------------------------------#
@@ -342,6 +342,42 @@ class Unet(object):
     
         image = Image.fromarray(np.uint8(pr))
         return image
+    # 在 unet.py 的 Unet 类中添加
+    def get_prob_map(self, image):
+        # 1. 预处理，保持和 get_miou_png 一致
+        image = image.convert('RGB')
+        # 这里建议保留你之前提到的 1024x1024 缩放或 padding 逻辑
+        # 简单起见，按标准流程：
+        image_data, nw, nh  = resize_image(image, (self.input_shape[1],self.input_shape[0]))
+        #---------------------------------------------------------#
+        #   添加上batch_size维度
+        #---------------------------------------------------------#
+        image_data  = np.expand_dims(np.transpose(preprocess_input(np.array(image_data, np.float32)), (2, 0, 1)), 0)
+
+        import torch
+        import torch.nn.functional as F
+        with torch.no_grad():
+            images = torch.from_numpy(image_data).type(torch.FloatTensor)
+            if self.cuda:
+                images = images.cuda()
+
+            # 2. 网络推理
+            pr = self.net(images)[0]
+            # 3. Softmax 获取概率
+            pr = F.softmax(pr.permute(1, 2, 0), dim=-1).cpu().numpy()
+            
+            # 4. 裁剪掉 padding 部分 (如果有)
+            pr = pr[int((self.input_shape[0] - nh) // 2) : int((self.input_shape[0] - nh) // 2 + nh), \
+                    int((self.input_shape[1] - nw) // 2) : int((self.input_shape[1] - nw) // 2 + nw)]
+            
+            # 5. 缩放回原图大小
+            # 我们只需要第1类（绳索类）的概率
+            rope_prob = pr[:, :, 1]
+            print("test1")
+            rope_prob = cv2.resize(rope_prob, (image.size[0], image.size[1]), interpolation=cv2.INTER_LINEAR)
+            print("test2")
+            
+        return rope_prob
 
 class Unet_ONNX(object):
     _defaults = {

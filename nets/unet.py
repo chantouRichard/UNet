@@ -4,6 +4,8 @@ import torch.nn as nn
 from nets.resnet import resnet50
 from nets.vgg import VGG16
 
+from .SFFNet.MDAF import MDAF
+from .SFFNet.FMS import FMS
 
 class unetUp(nn.Module):
     def __init__(self, in_size, out_size):
@@ -34,7 +36,7 @@ class Unet(nn.Module):
             raise ValueError('Unsupported backbone - `{}`, Use vgg, resnet50.'.format(backbone))
         out_filters = [64, 128, 256, 512]
 
-        self.alpha = nn.Parameter(torch.tensor(0.5))
+        self.alpha = nn.Parameter(torch.tensor(1.0))
         # upsampling
         # 64,64,512
         self.up_concat4 = unetUp(in_filters[3], out_filters[3])
@@ -59,12 +61,51 @@ class Unet(nn.Module):
         self.final = nn.Conv2d(out_filters[0], num_classes, 1)
 
         self.backbone = backbone
+                
+        # SFFNet部分
+        # Bottleneck通道数
+        # bottleneck_channels = 512
+
+        # self.fms = FMS(
+        #     in_ch=bottleneck_channels,
+        #     out_ch=bottleneck_channels,
+        #     num_heads=8,
+        #     window_size=8
+        # )
+
+        # self.mdaf_l = MDAF(
+        #     bottleneck_channels,
+        #     num_heads=8,
+        #     LayerNorm_type='WithBias'
+        # )
+
+        # self.mdaf_h = MDAF(
+        #     bottleneck_channels,
+        #     num_heads=8,
+        #     LayerNorm_type='WithBias'
+        # )
+
+        # self.fuse_conv = nn.Conv2d(
+        #     bottleneck_channels,
+        #     bottleneck_channels,
+        #     kernel_size=1
+        # )
 
     def forward(self, inputs, vessel=None):
         if self.backbone == "vgg":
             [feat1, feat2, feat3, feat4, feat5] = self.vgg.forward(inputs)
         elif self.backbone == "resnet50":
             [feat1, feat2, feat3, feat4, feat5] = self.resnet.forward(inputs)
+            
+        # ==============================
+        # Frequency Enhancement Module
+        # ==============================
+        # low, high, glb, local = self.fms(feat5)
+
+        # glb = self.mdaf_l(low, glb)
+        # local = self.mdaf_h(high, local)
+
+        # feat5 = glb + local + feat5   # residual
 
         # ---------------------------
         # 在这里加入 vessel 调制
@@ -75,7 +116,7 @@ class Unet(nn.Module):
             vessel = torch.nn.functional.interpolate(
                 vessel, size=feat1.shape[2:], mode='bilinear', align_corners=False
             )
-            feat1 = feat1 * (1 + 0 * vessel)
+            feat1 = feat1 * (1 + 1 * vessel)
             
         up4 = self.up_concat4(feat4, feat5)
         up3 = self.up_concat3(feat3, up4)

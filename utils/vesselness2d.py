@@ -142,7 +142,6 @@ class vesselness2d:
 	
 	# 血管强化
     def vesselness2d(self):
-        print("调用vesselness2d")
         for j in range(len(self.sigma)):
             lambda1, lambda2 = self.imageEigenvalues(self.image, self.sigma[j])
             lambda3 = lambda2.copy()
@@ -155,10 +154,55 @@ class vesselness2d:
             response[(lambda2 >= 0)] = 0
 
             response[np.where(np.isinf(response))[0]] = 0
+
             if j == 0:
                 vesselness = response
             else:
                 vesselness = np.maximum(vesselness, response)
-        vesselness[(vesselness < 1e-2)] = 0
-        return vesselness
+        # ===== 原有阈值 =====
+        vesselness[vesselness < 1e-2] = 0
+
+        seed_threshold = 0.2 * vesselness.max()
+        strong_mask = vesselness > seed_threshold
+
+        # ===== 计算梯度方向 =====
+        grad_x = cv2.Sobel(vesselness.astype(np.float32), cv2.CV_32F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(vesselness.astype(np.float32), cv2.CV_32F, 0, 1, ksize=3)
+
+        h, w = vesselness.shape
+        region = strong_mask.astype(np.uint8)
+
+        max_distance = 10
+
+        # ===== 从强响应区域开始反方向扩散 =====
+        strong_points = np.argwhere(strong_mask)
+
+        for y, x in strong_points:
+            gx = grad_x[y, x]
+            gy = grad_y[y, x]
+
+            norm = np.sqrt(gx * gx + gy * gy) + 1e-6
+            dx = -gx / norm   # 反方向
+            dy = -gy / norm
+
+            cur_x = float(x)
+            cur_y = float(y)
+
+            for _ in range(max_distance):
+                cur_x += dx
+                cur_y += dy
+
+                ix = int(round(cur_x))
+                iy = int(round(cur_y))
+
+                if ix < 0 or ix >= w or iy < 0 or iy >= h:
+                    break
+
+                # 如果遇到强响应，停止
+                if strong_mask[iy, ix]:
+                    break
+
+                region[iy, ix] = 1
+
+        return region.astype(np.uint8)
     
