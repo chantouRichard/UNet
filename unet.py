@@ -373,9 +373,7 @@ class Unet(object):
             # 5. 缩放回原图大小
             # 我们只需要第1类（绳索类）的概率
             rope_prob = pr[:, :, 1]
-            print("test1")
             rope_prob = cv2.resize(rope_prob, (image.size[0], image.size[1]), interpolation=cv2.INTER_LINEAR)
-            print("test2")
             
         return rope_prob
 
