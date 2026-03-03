@@ -144,3 +144,9 @@ img/
 miou_out/
 miou_out_virtual/
 miou_out_real/
+
+CRFs_utils/
+Hessian_Analysis_Visual/
+test_JPEG/
+test_JPEG_out/
+Vessel_result/
