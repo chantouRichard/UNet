@@ -10,6 +10,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from nets.unet import Unet
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from nets.mkunet_network import MK_UNet   # 改成你真实的文件名
 from nets.unet_training import get_lr_scheduler, set_optimizer_lr, weights_init
 from utils.callbacks import EvalCallback, LossHistory
 from utils.dataloader import UnetDataset, unet_dataset_collate
@@ -147,6 +150,7 @@ if __name__ == "__main__":
     #   vgg
     #   resnet50
     #-----------------------------------------------------#
+    network     = "unet"
     backbone    = "vgg"
     #----------------------------------------------------------------------------------------------------------------------------#
     #   pretrained      是否使用主干网络的预训练权重，此处使用的是主干的权重，因此是在模型构建的时候进行加载的。
@@ -222,7 +226,7 @@ if __name__ == "__main__":
     #                       (当Freeze_Train=False时失效)
     #------------------------------------------------------------------#
     Init_Epoch          = 0
-    Freeze_Epoch        = 15
+    Freeze_Epoch        = -1
     Freeze_batch_size   = 4
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
@@ -231,7 +235,7 @@ if __name__ == "__main__":
     #   UnFreeze_Epoch          模型总共训练的epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 30
+    UnFreeze_Epoch      = 120
     Unfreeze_batch_size = 4
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
@@ -344,7 +348,10 @@ if __name__ == "__main__":
         else:
             download_weights(backbone)
 
-    model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone).train()
+    if network == 'mkir':
+        model = MK_UNet(num_classes=num_classes).train()
+    elif network == 'unet':
+        model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone).train()
     if not pretrained:
         weights_init(model)
     if model_path != '':
@@ -521,9 +528,9 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
-        CBAM_WARMUP_EPOCHS = 5      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 15 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
+        CBAM_WARMUP_EPOCHS = -1      # 前5epoch只训CBAM
+        PARTIAL_UNFREEZE_EPOCHS = -1 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 120    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, UnFreeze_Epoch):
             #---------------------------------------#
             #   如果模型有冻结学习部分

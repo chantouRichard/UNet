@@ -159,6 +159,7 @@ if __name__ == "__main__":
     #   vgg
     #   resnet50
     #-----------------------------------------------------#
+    network     = "mkir"
     backbone    = "vgg"
     #----------------------------------------------------------------------------------------------------------------------------#
     #   pretrained      是否使用主干网络的预训练权重，此处使用的是主干的权重，因此是在模型构建的时候进行加载的。
@@ -356,28 +357,10 @@ if __name__ == "__main__":
         else:
             download_weights(backbone)
 
-    import torch.nn as nn
-    def convert_bn_to_gn(module):
-        """
-        递归将模型中所有的 BatchNorm 替换为 GroupNorm
-        适用于 BatchSize=1 的情况
-        """
-        for name, child in module.named_children():
-            if isinstance(child, nn.BatchNorm2d):
-                num_channels = child.num_features
-                # 选一个能被整除的组数，通常 8 是个好选择
-                num_groups = 8 if num_channels % 8 == 0 else (4 if num_channels % 4 == 0 else 1)
-                setattr(module, name, nn.GroupNorm(num_groups, num_channels))
-            elif isinstance(child, (nn.BatchNorm1d, nn.SyncBatchNorm)):
-                num_channels = child.num_features
-                # BatchNorm1d 常见于注意力机制的线性层后，直接换成 LayerNorm 最稳
-                setattr(module, name, nn.LayerNorm(num_channels))
-            else:
-                convert_bn_to_gn(child)
-    model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone)
-    convert_bn_to_gn(model) # 关键：模型定义完直接转
-    print("\n直接转BatchNorm\n")
-    model.train()
+    if network == 'mkir':
+        model = MK_UNet(num_classes=num_classes).train()
+    elif network == 'unet':
+        model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone).train()
     if not pretrained:
         weights_init(model)
     if model_path != '':

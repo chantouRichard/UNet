@@ -10,6 +10,10 @@ from PIL import Image
 from torch import nn
 
 from nets.unet import Unet as unet
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from nets.mkunet_network import MK_UNet
 from utils.utils import cvtColor, preprocess_input, resize_image, show_config
 
 
@@ -26,7 +30,7 @@ class Unet(object):
         #   训练好后logs文件夹下存在多个权值文件，选择验证集损失较低的即可。
         #   验证集损失较低不代表miou较高，仅代表该权值在验证集上泛化性能较好。
         #-------------------------------------------------------------------#
-        "model_path"    : 'miou_out/miou_2026_02_11_20_52_28-CBAM+50/best_epoch_weights.pth',
+        "model_path"    : 'logs/best_epoch_weights.pth',
         #--------------------------------#
         #   所需要区分的类的个数+1
         #--------------------------------#
@@ -34,6 +38,7 @@ class Unet(object):
         #--------------------------------#
         #   所使用的的主干网络：vgg、resnet50   
         #--------------------------------#
+        "network"       : "mkir",
         "backbone"      : "vgg",
         #--------------------------------#
         #   输入图片的大小
@@ -84,7 +89,10 @@ class Unet(object):
     #   获得所有的分类
     #---------------------------------------------------#
     def generate(self, onnx=False):
-        self.net = unet(num_classes = self.num_classes, backbone=self.backbone)
+        if self.network == 'mkir':
+            self.net = MK_UNet(num_classes = self.num_classes)
+        elif self.network == 'unet':
+            self.net = unet(num_classes = self.num_classes, backbone=self.backbone)
 
         device      = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.net.load_state_dict(torch.load(self.model_path, map_location=device))
