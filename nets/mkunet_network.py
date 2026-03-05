@@ -286,11 +286,59 @@ def mk_irb_bottleneck(in_c, out_c, n, s, expansion_factor=2, dw_parallel=True, a
 # channels = [16,32,64,96,160] for MK_UNet
 # channels = [32,64,128,192,320] for MK_UNet-M
 # channels = [64,128,256,384,512] for MK_UNet-L
+class ChannelAttentionModule(nn.Module):
+    def __init__(self, channel, ratio=16):
+        super(ChannelAttentionModule, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+
+        self.shared_MLP = nn.Sequential(
+            nn.Conv2d(channel, channel // ratio, 1, bias=False),
+            nn.ReLU(),
+            nn.Conv2d(channel // ratio, channel, 1, bias=False)
+        )
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avgout = self.shared_MLP(self.avg_pool(x))
+        maxout = self.shared_MLP(self.max_pool(x))
+        return self.sigmoid(avgout + maxout)
+
+class SpatialAttentionModule(nn.Module):
+    def __init__(self):
+        super(SpatialAttentionModule, self).__init__()
+        self.conv2d = nn.Conv2d(in_channels=2, out_channels=1, kernel_size=7, stride=1, padding=3)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avgout = torch.mean(x, dim=1, keepdim=True)
+        maxout, _ = torch.max(x, dim=1, keepdim=True)
+        out = torch.cat([avgout, maxout], dim=1)
+        out = self.sigmoid(self.conv2d(out))
+        return out
+
+class CBAM(nn.Module):
+    def __init__(self, channel):
+        super(CBAM, self).__init__()
+        self.channel_attention = ChannelAttentionModule(channel)
+        self.spatial_attention = SpatialAttentionModule()
+
+    def forward(self, x):
+        out = self.channel_attention(x) * x
+        out = self.spatial_attention(out) * out
+        return out
 
 class MK_UNet(nn.Module):
 
     def __init__(self,  num_classes=2, in_channels=3, channels=[16,32,64,128,256], depths=[1, 1, 1, 1, 1], kernel_sizes=[1,3,5], expansion_factor=2, gag_kernel=3, **kwargs):
         super().__init__()
+        
+        # 在5个下采样阶段后添加CBAM注意力
+        self.cbam1 = CBAM(channel=channels[0])  # 16
+        self.cbam2 = CBAM(channel=channels[1])  # 32
+        self.cbam3 = CBAM(channel=channels[2])  # 64
+        self.cbam4 = CBAM(channel=channels[3])  # 128
+        self.cbam5 = CBAM(channel=channels[4])  # 256
         
         self.encoder1 = mk_irb_bottleneck(in_channels, channels[0], depths[0], 1, expansion_factor=expansion_factor, dw_parallel=True, add=True, kernel_sizes=kernel_sizes)
         self.encoder2 = mk_irb_bottleneck(channels[0], channels[1], depths[1], 1, expansion_factor=expansion_factor, dw_parallel=True, add=True, kernel_sizes=kernel_sizes)  
@@ -330,21 +378,26 @@ class MK_UNet(nn.Module):
         B = x.shape[0]
         ### Encoder
         ### Stage 1
-        out = F.max_pool2d(self.encoder1(x),2,2)
+        e1 = self.cbam1(self.encoder1(x))
+        out = F.max_pool2d(e1,2,2)
         t1 = out
         ### Stage 2
-        out = F.max_pool2d(self.encoder2(out),2,2)
+        e2 = self.cbam2(self.encoder2(out))
+        out = F.max_pool2d(e2,2,2)
         t2 = out
         ### Stage 3
-        out = F.max_pool2d(self.encoder3(out),2,2)
+        e3 = self.cbam3(self.encoder3(out))
+        out = F.max_pool2d(e3,2,2)
         t3 = out
 
         ### Stage 4
-        out = F.max_pool2d(self.encoder4(out),2,2)
+        e4 = self.cbam4(self.encoder4(out))
+        out = F.max_pool2d(e4,2,2)
         t4 = out
 
         ### Bottleneck
-        out = F.max_pool2d(self.encoder5(out),2,2)
+        e5 = self.cbam5(self.encoder5(out))
+        out = F.max_pool2d(e5,2,2)
 
         ### Stage 4
         out = self.CA1(out)*out

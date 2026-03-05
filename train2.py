@@ -10,6 +10,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from nets.unet import Unet
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from nets.mkunet_network import MK_UNet   # 改成你真实的文件名
 from nets.unet_training import get_lr_scheduler, set_optimizer_lr, weights_init
 from utils.callbacks import EvalCallback, LossHistory
 from utils.dataloader import UnetDataset, unet_dataset_collate
@@ -186,7 +189,7 @@ if __name__ == "__main__":
     #   一般来讲，网络从0开始的训练效果会很差，因为权值太过随机，特征提取效果不明显，因此非常、非常、非常不建议大家从0开始训练！
     #   如果一定要从0开始，可以了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path  = "logs/best_unet_30epoch.pth"
+    model_path  = "miou_out/miou_2026_03_04_10_20_10/best_epoch_weights.pth"
     #-----------------------------------------------------#
     #   input_shape     输入图片的大小，32的倍数
     #-----------------------------------------------------#
@@ -235,7 +238,7 @@ if __name__ == "__main__":
     #                       (当Freeze_Train=False时失效)
     #------------------------------------------------------------------#
     Init_Epoch          = 0
-    Freeze_Epoch        = 7
+    Freeze_Epoch        = 12
     Freeze_batch_size   = 4
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
@@ -244,7 +247,7 @@ if __name__ == "__main__":
     #   UnFreeze_Epoch          模型总共训练的epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 15
+    UnFreeze_Epoch      = 30
     Unfreeze_batch_size = 4
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
@@ -537,9 +540,9 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
-        CBAM_WARMUP_EPOCHS = 3      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 7 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 15    # 20-40epoch全部解冻
+        CBAM_WARMUP_EPOCHS = 4      # 前5epoch只训CBAM
+        PARTIAL_UNFREEZE_EPOCHS = 12 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, FULL_UNFREEZE_EPOCHS):
             #---------------------------------------#
             #   如果模型有冻结学习部分
