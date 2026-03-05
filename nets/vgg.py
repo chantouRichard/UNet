@@ -44,6 +44,61 @@ class CBAM(nn.Module):
         out = self.spatial_attention(out) * out
         return out
 
+from nets.FAM_diff import FAM
+
+class VGGWithFAM(nn.Module):
+    def __init__(self, features, num_classes=1000):
+        super(VGGWithFAM, self).__init__()
+        self.features = features
+        
+        # 在5个下采样阶段后添加CBAM注意力
+        self.fam1 = FAM(in_channels=64)    # 对应feat1的输出通道
+        self.fam2 = FAM(in_channels=128)   # 对应feat2的输出通道  
+        self.fam3 = FAM(in_channels=256)   # 对应feat3的输出通道
+        self.fam4 = FAM(in_channels=512)   # 对应feat4的输出通道
+        self.fam5 = FAM(in_channels=512)   # 对应feat5的输出通道
+        
+        # VGG的分类器部分
+        self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+        self.classifier = nn.Sequential(
+            nn.Linear(512 * 7 * 7, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, num_classes),
+        )
+    
+    def forward(self, x):
+        # 第1阶段：前4层 → CBAM
+        feat1 = self.features[:4](x)
+        feat1 = self.fam1(feat1)
+        
+        # 第2阶段：4-9层 → CBAM
+        feat2 = self.features[4:9](feat1)
+        feat2 = self.fam2(feat2)
+        
+        # 第3阶段：9-16层 → CBAM
+        feat3 = self.features[9:16](feat2)
+        feat3 = self.fam3(feat3)
+        
+        # 第4阶段：16-23层 → CBAM
+        feat4 = self.features[16:23](feat3)
+        feat4 = self.fam4(feat4)
+        
+        # 第5阶段：23层到倒数第2层 → CBAM
+        feat5 = self.features[23:-1](feat4)
+        feat5 = self.fam5(feat5)
+        
+        # 如果需要分类，继续执行
+        # x = self.avgpool(feat5)
+        # x = torch.flatten(x, 1)
+        # x = self.classifier(x)
+        # return x
+        
+        # 对于UNet编码器，返回多尺度特征
+        return [feat1, feat2, feat3, feat4, feat5]
 
 class VGGWithCBAM(nn.Module):
     def __init__(self, features, num_classes=1000):
@@ -163,7 +218,7 @@ cfgs = {
 
 def VGG16(pretrained, in_channels = 3, **kwargs):
     # model = VGG(make_layers(cfgs["D"], batch_norm = False, in_channels = in_channels), **kwargs)
-    model = VGGWithCBAM(make_layers(cfgs["D"], batch_norm = False, in_channels = in_channels), **kwargs)
+    model = VGGWithFAM(make_layers(cfgs["D"], batch_norm = False, in_channels = in_channels), **kwargs)
     if pretrained:
         state_dict = load_state_dict_from_url("https://download.pytorch.org/models/vgg16-397923af.pth", model_dir="./model_data")
         model.load_state_dict(state_dict)
