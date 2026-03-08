@@ -21,6 +21,7 @@ class unetUp(nn.Module):
         outputs = self.relu(outputs)
         return outputs
 
+import torch.nn.functional as F
 class MaskAttn(nn.Module):
     def __init__(self, channels, size):
         super(MaskAttn, self).__init__()
