@@ -185,7 +185,7 @@ if __name__ == "__main__":
     #   一般来讲，网络从0开始的训练效果会很差，因为权值太过随机，特征提取效果不明显，因此非常、非常、非常不建议大家从0开始训练！
     #   如果一定要从0开始，可以了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path  = "logs/best_unet_30epoch.pth"
+    model_path  = "miou_out/miou_2026_03_07_09_43_31/best_epoch_weights.pth"
     #-----------------------------------------------------#
     #   input_shape     输入图片的大小，32的倍数
     #-----------------------------------------------------#
@@ -234,7 +234,7 @@ if __name__ == "__main__":
     #                       (当Freeze_Train=False时失效)
     #------------------------------------------------------------------#
     Init_Epoch          = 0
-    Freeze_Epoch        = 7
+    Freeze_Epoch        = -1
     Freeze_batch_size   = 4
     #------------------------------------------------------------------#
     #   解冻阶段训练参数
@@ -243,7 +243,7 @@ if __name__ == "__main__":
     #   UnFreeze_Epoch          模型总共训练的epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 15
+    UnFreeze_Epoch      = 30
     Unfreeze_batch_size = 4
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
@@ -356,28 +356,7 @@ if __name__ == "__main__":
         else:
             download_weights(backbone)
 
-    import torch.nn as nn
-    def convert_bn_to_gn(module):
-        """
-        递归将模型中所有的 BatchNorm 替换为 GroupNorm
-        适用于 BatchSize=1 的情况
-        """
-        for name, child in module.named_children():
-            if isinstance(child, nn.BatchNorm2d):
-                num_channels = child.num_features
-                # 选一个能被整除的组数，通常 8 是个好选择
-                num_groups = 8 if num_channels % 8 == 0 else (4 if num_channels % 4 == 0 else 1)
-                setattr(module, name, nn.GroupNorm(num_groups, num_channels))
-            elif isinstance(child, (nn.BatchNorm1d, nn.SyncBatchNorm)):
-                num_channels = child.num_features
-                # BatchNorm1d 常见于注意力机制的线性层后，直接换成 LayerNorm 最稳
-                setattr(module, name, nn.LayerNorm(num_channels))
-            else:
-                convert_bn_to_gn(child)
-    model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone)
-    convert_bn_to_gn(model) # 关键：模型定义完直接转
-    print("\n直接转BatchNorm\n")
-    model.train()
+    model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone).train()
     if not pretrained:
         weights_init(model)
     if model_path != '':
@@ -554,9 +533,9 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
-        CBAM_WARMUP_EPOCHS = 3      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 7 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 15    # 20-40epoch全部解冻
+        CBAM_WARMUP_EPOCHS = 4      # 前5epoch只训CBAM
+        PARTIAL_UNFREEZE_EPOCHS = 12 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, FULL_UNFREEZE_EPOCHS):
             #---------------------------------------#
             #   如果模型有冻结学习部分

@@ -79,8 +79,8 @@ def batch_visualize(img_folder, mask_folder, save_dir=None, show=False):
 # )
 
 # 2. 批量处理并保存 (不显示，直接存入目标文件夹)
-IMG_DIR = r"img\\img_aug\\JPEGImages"
-MASK_DIR = r"img\\img_aug\\SegmentationClass"
-OUT_DIR = r"img\\img_aug\\previews"
+# IMG_DIR = r"img\\img_aug\\JPEGImages"
+# MASK_DIR = r"img\\img_aug\\SegmentationClass"
+# OUT_DIR = r"img\\img_aug\\previews"
 
-batch_visualize(IMG_DIR, MASK_DIR, save_dir=OUT_DIR, show=False)
+# batch_visualize(IMG_DIR, MASK_DIR, save_dir=OUT_DIR, show=False)
