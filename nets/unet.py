@@ -3,18 +3,28 @@ import torch.nn as nn
 
 from nets.resnet import resnet50
 from nets.vgg import VGG16
-
+from nets.lsnet import LSConv
 
 class unetUp(nn.Module):
     def __init__(self, in_size, out_size):
         super(unetUp, self).__init__()
-        self.conv1  = nn.Conv2d(in_size, out_size, kernel_size = 3, padding = 1)
-        self.conv2  = nn.Conv2d(out_size, out_size, kernel_size = 3, padding = 1)
+        # 将原来的 nn.Conv2d 替换为 LSConv
+        # conv1 的输入通道是 in_size，输出是 out_size
+        self.conv1  = LSConv(dim = out_size) # 注意：LSConv内部通常in/out维相同，或需根据LSConv定义调整
+        # 如果你的LSConv定义是LSConv(dim)，通常它是一个不改变通道数的算子
+        # 针对标准的U-Net逻辑，我们先用一个1x1卷积调整通道，再接LSConv，或者直接替换
+        
+        # 更加稳健的替换方式（保持通道转换逻辑）：
+        self.adjust_chan = nn.Conv2d(in_size, out_size, 1) # 先把拼接后的通道降维
+        self.conv1  = LSConv(dim = out_size) 
+        self.conv2  = LSConv(dim = out_size)
+        
         self.up     = nn.UpsamplingBilinear2d(scale_factor = 2)
         self.relu   = nn.ReLU(inplace = True)
 
     def forward(self, inputs1, inputs2):
         outputs = torch.cat([inputs1, self.up(inputs2)], 1)
+        outputs = self.adjust_chan(outputs) # 调整通道数以适配 LSConv
         outputs = self.conv1(outputs)
         outputs = self.relu(outputs)
         outputs = self.conv2(outputs)

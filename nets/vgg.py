@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.hub import load_state_dict_from_url
+from nets.lsnet import LSConv
 
 class ChannelAttentionModule(nn.Module):
     def __init__(self, channel, ratio=16):
@@ -129,7 +130,8 @@ class VGG(nn.Module):
 
     def _initialize_weights(self):
         for m in self.modules():
-            if isinstance(m, nn.Conv2d):
+            # if isinstance(m, nn.Conv2d):
+            if isinstance(m, LSConv):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
@@ -147,7 +149,8 @@ def make_layers(cfg, batch_norm=False, in_channels = 3):
         if v == 'M':
             layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
         else:
-            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            # conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            conv2d = LSConv(dim=in_channels)
             if batch_norm:
                 layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
             else:
