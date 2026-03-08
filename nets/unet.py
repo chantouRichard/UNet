@@ -129,11 +129,11 @@ class Unet(nn.Module):
         
         # 2. 第三层上采样
         up3 = self.up_concat3(feat3, up4)
-        up3 = self.mask_attn3(up3)
+        # up3 = self.mask_attn3(up3)
         
         # 3. 第二层上采样
         up2 = self.up_concat2(feat2, up3)
-        up2 = self.mask_attn2(up2)
+        # up2 = self.mask_attn2(up2)
         
         # 4. 第一层上采样（分辨率最高，慎重使用，如果显存够就加）
         up1 = self.up_concat1(feat1, up2)
