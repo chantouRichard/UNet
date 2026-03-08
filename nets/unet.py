@@ -21,6 +21,46 @@ class unetUp(nn.Module):
         outputs = self.relu(outputs)
         return outputs
 
+class MaskAttn(nn.Module):
+    def __init__(self, channels, size):
+        super(MaskAttn, self).__init__()
+        self.channels = channels
+        self.size = size
+        self.query = nn.Linear(channels, channels)
+        self.key = nn.Linear(channels, channels)
+        self.value = nn.Linear(channels, channels)
+        self.mask = None  
+        self.norm = nn.LayerNorm([channels])
+
+    def forward(self, x):
+        batch_size, channels, height, width = x.size()
+        if channels != self.channels:
+            raise ValueError("Input channel size does not match initialized channel size.")
+        
+        x = x.view(batch_size, channels, height * width).permute(0, 2, 1)  
+
+        Q = self.query(x)  
+        K = self.key(x)    
+        V = self.value(x)  
+
+        scores = torch.matmul(Q, K.transpose(-2, -1))  
+        scores = scores / (self.channels ** 0.5)       
+
+        if self.mask is None or self.mask.size(-1) != height * width:
+            binary_mask = torch.randint(0, 2, (batch_size, height, width), device=x.device)
+            binary_mask = binary_mask.view(batch_size, -1)  
+            processed_mask = torch.where(binary_mask > 0.5, torch.tensor(0.0, device=x.device), torch.tensor(-float('inf'), device=x.device))
+            self.mask = processed_mask.unsqueeze(1).expand(-1, height * width, -1) 
+            
+        scores = scores + self.mask
+
+        attention_weights = F.softmax(scores, dim=-1)  
+        attention_output = torch.matmul(attention_weights, V) 
+        attention_output = attention_output + x  
+        attention_output = self.norm(attention_output)
+        
+        return attention_output.view(batch_size, channels, height, width)
+
 class Unet(nn.Module):
     def __init__(self, num_classes = 21, pretrained = False, backbone = 'vgg'):
         super(Unet, self).__init__()
@@ -43,6 +83,14 @@ class Unet(nn.Module):
         self.up_concat2 = unetUp(in_filters[1], out_filters[1])
         # 512,512,64
         self.up_concat1 = unetUp(in_filters[0], out_filters[0])
+        
+        # 我们主要在深层（特征图较小的地方）使用，性能提升最明显且不卡显存
+        self.mask_attn4 = MaskAttn(512, 512) # 对应 up4
+        self.mask_attn3 = MaskAttn(256, 256) # 对应 up3
+        self.mask_attn2 = MaskAttn(128, 128) # 对应 up2
+        
+        # 最后一层根据你的需求可选
+        self.mask_attn1 = MaskAttn(64, 64)
 
         if backbone == 'resnet50':
             self.up_conv = nn.Sequential(
@@ -65,10 +113,21 @@ class Unet(nn.Module):
         elif self.backbone == "resnet50":
             [feat1, feat2, feat3, feat4, feat5] = self.resnet.forward(inputs)
 
-        up4 = self.up_concat4(feat4, feat5)
+        # 1. 第四层上采样：融合深层语义与浅层特征
+        up4 = self.up_concat4(feat4, feat5) 
+        up4 = self.mask_attn4(up4)          # 使用 Mask 机制过滤掉不相关的背景
+        
+        # 2. 第三层上采样
         up3 = self.up_concat3(feat3, up4)
+        up3 = self.mask_attn3(up3)
+        
+        # 3. 第二层上采样
         up2 = self.up_concat2(feat2, up3)
+        up2 = self.mask_attn2(up2)
+        
+        # 4. 第一层上采样（分辨率最高，慎重使用，如果显存够就加）
         up1 = self.up_concat1(feat1, up2)
+        # up1 = self.mask_attn1(up1)
 
         if self.up_conv != None:
             up1 = self.up_conv(up1)
