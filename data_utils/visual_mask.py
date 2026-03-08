@@ -56,7 +56,7 @@ def batch_visualize(img_folder, mask_folder, save_dir=None, show=False):
     img_list = sorted([f for f in os.listdir(img_folder) if f.endswith(('.jpg', '.png', '.jpeg'))])
     
     print(f"开始处理文件夹，共找到 {len(img_list)} 张图片...")
-    for img_name in tqdm(img_list):
+    for img_name in tqdm(img_list, disable=True):
         # 假设掩码和原图同名，但可能后缀不同（如 .png）
         pure_name = os.path.splitext(img_name)[0]
         img_path = os.path.join(img_folder, img_name)

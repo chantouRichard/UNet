@@ -64,7 +64,7 @@ if __name__ == "__main__":
         print("Load model done.")
 
         print("Get predict result.")
-        for image_id in tqdm(image_ids):
+        for image_id in tqdm(image_ids, disable=True):
             image_path  = os.path.join(VOCdevkit_path, "VOC2007/JPEGImages/"+image_id+".jpg")
             image       = Image.open(image_path)
             image       = unet.get_miou_png(image)

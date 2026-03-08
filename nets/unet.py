@@ -46,13 +46,22 @@ class MaskAttn(nn.Module):
         scores = torch.matmul(Q, K.transpose(-2, -1))  
         scores = scores / (self.channels ** 0.5)       
 
-        if self.mask is None or self.mask.size(-1) != height * width:
-            binary_mask = torch.randint(0, 2, (batch_size, height, width), device=x.device)
-            binary_mask = binary_mask.view(batch_size, -1)  
-            processed_mask = torch.where(binary_mask > 0.5, torch.tensor(0.0, device=x.device), torch.tensor(-float('inf'), device=x.device))
-            self.mask = processed_mask.unsqueeze(1).expand(-1, height * width, -1) 
+        # 1. 动态生成当前 Batch 所需的 Mask，不要赋值给 self.mask
+        # 直接使用 x.device 确保在多卡环境下，Mask 生成在正确的 GPU 上
+        binary_mask = torch.randint(0, 2, (batch_size, height, width), device=x.device)
+        binary_mask = binary_mask.view(batch_size, -1)  
+        
+        # 2. 处理掩码数值
+        processed_mask = torch.where(
+            binary_mask > 0.5, 
+            torch.tensor(0.0, device=x.device), 
+            torch.tensor(-float('inf'), device=x.device)
+        )
+        
+        # 3. 这里的命名改为局部变量 current_mask
+        current_mask = processed_mask.unsqueeze(1).expand(-1, height * width, -1)
             
-        scores = scores + self.mask
+        scores = scores + current_mask
 
         attention_weights = F.softmax(scores, dim=-1)  
         attention_output = torch.matmul(attention_weights, V) 

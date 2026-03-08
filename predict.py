@@ -180,7 +180,7 @@ if __name__ == "__main__":
         from tqdm import tqdm
 
         img_names = os.listdir(dir_origin_path)
-        for img_name in tqdm(img_names):
+        for img_name in tqdm(img_names, disable=True):
             if img_name.lower().endswith(('.bmp', '.dib', '.png', '.jpg', '.jpeg', '.pbm', '.pgm', '.ppm', '.tif', '.tiff')):
                 image_path  = os.path.join(dir_origin_path, img_name)
                 image       = Image.open(image_path)
