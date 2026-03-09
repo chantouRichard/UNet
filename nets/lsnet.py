@@ -7,7 +7,16 @@ import numpy as np
 import itertools
 
 from mmcv_custom import load_checkpoint, _load_checkpoint, load_state_dict
-from mmseg.utils import get_root_logger
+try:
+    # 尝试旧版导入（兼容性保留）
+    from mmseg.utils import get_root_logger
+except (ImportError, AttributeError):
+    # 适配 MMSegmentation 1.x / mmengine
+    from mmengine.logging import MMLogger
+    
+    def get_root_logger(name='mmseg', log_file=None, log_level='INFO'):
+        """手动实现一个兼容旧版接口的日志获取函数"""
+        return MMLogger.get_instance(name, log_file=log_file, log_level=log_level)
 from mmseg.models.builder import BACKBONES
 from torch.nn.modules.batchnorm import _BatchNorm
 from .ska import SKA

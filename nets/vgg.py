@@ -143,14 +143,24 @@ class VGG(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
 
-def make_layers(cfg, batch_norm=False, in_channels = 3):
+def make_layers(cfg, batch_norm=False, in_channels=3):
     layers = []
     for v in cfg:
         if v == 'M':
             layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
         else:
-            # conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
-            conv2d = LSConv(dim=in_channels)
+            # 修改点：判断通道数是否支持 LSConv 的组卷积逻辑
+            # LSConv 默认 groups=8，所以当 in_channels < 8 时必须用普通卷积
+            if in_channels < 8:
+                conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            else:
+                # 只有当通道数足够时才替换为 LSConv
+                # 注意：如果 LSConv 内部不改变通道数，后面需要接一个 1x1 卷积调整通道到 v
+                conv2d = nn.Sequential(
+                    LSConv(dim=in_channels),
+                    nn.Conv2d(in_channels, v, kernel_size=1) # 调整通道数从 in_channels 到 v
+                )
+            
             if batch_norm:
                 layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
             else:
