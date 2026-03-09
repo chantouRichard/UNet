@@ -17,7 +17,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
 
     if local_rank == 0:
         print('Start Train')
-        pbar = tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=True)
+        pbar = tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=False)
     model_train.train()
     for iteration, batch in enumerate(gen):
         if iteration >= epoch_step: 
@@ -37,29 +37,54 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             #   前向传播
             #----------------------#
             outputs = model_train(imgs)
+            
             #----------------------#
             #   损失计算
             #----------------------#
-            if focal_loss:
-                loss = Focal_Loss(outputs, pngs, weights, num_classes = num_classes)
+            # 1. 深度监督下的损失累加
+            if isinstance(outputs, list):
+                loss = 0
+                # 为不同尺度分配权重，通常越靠近输出层（后面）权重越大
+                # 假设 outputs 为 [out4, out3, out2, out1]
+                weights_ds = [0.1, 0.2, 0.3, 1.0] 
+                
+                for i in range(len(outputs)):
+                    # 计算当前尺度的 CE/Focal Loss
+                    if focal_loss:
+                        temp_loss = Focal_Loss(outputs[i], pngs, weights, num_classes = num_classes)
+                    else:
+                        temp_loss = CE_Loss(outputs[i], pngs, weights, num_classes = num_classes)
+
+                    # 计算当前尺度的 Dice Loss
+                    if dice_loss:
+                        temp_dice = Dice_loss(outputs[i], labels)
+                        temp_loss = temp_loss + temp_dice
+                    
+                    # 累加权重损失
+                    loss = loss + temp_loss * weights_ds[i]
+                
+                # 指定主输出用于后续计算 f_score
+                main_output = outputs[-1]
             else:
-                loss = CE_Loss(outputs, pngs, weights, num_classes = num_classes)
+                # 2. 普通模式（非深度监督）下的逻辑
+                if focal_loss:
+                    loss = Focal_Loss(outputs, pngs, weights, num_classes = num_classes)
+                else:
+                    loss = CE_Loss(outputs, pngs, weights, num_classes = num_classes)
 
-            if dice_loss:
-                main_dice = Dice_loss(outputs, labels)
-                loss      = loss + main_dice
+                if dice_loss:
+                    main_dice = Dice_loss(outputs, labels)
+                    loss = loss + main_dice
+                
+                main_output = outputs
 
+            #-------------------------------#
+            #   指标计算（统一使用最终输出）
+            #-------------------------------#
             with torch.no_grad():
-                #-------------------------------#
-                #   计算f_score
-                #-------------------------------#
-                _f_score = f_score(outputs, labels)
+                _f_score = f_score(main_output, labels)
 
-            # print(f"Loss值: {loss.item()}")
-            # print(f"Loss是否有限: {torch.isfinite(loss)}")
-
-            # if not torch.isfinite(loss):
-            #     print("⚠️ Loss不是有限数！可能是梯度爆炸")
+            # 这里的 loss 已经是各分支权重的总和
             loss.backward()
             optimizer.step()
         else:
@@ -107,7 +132,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
         pbar.close()
         print('Finish Train')
         print('Start Validation')
-        pbar = tqdm(total=epoch_step_val, desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=True)
+        pbar = tqdm(total=epoch_step_val, desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=False)
 
     model_train.eval()
     for iteration, batch in enumerate(gen_val):
@@ -177,7 +202,7 @@ def fit_one_epoch_no_val(model_train, model, loss_history, optimizer, epoch, epo
     
     if local_rank == 0:
         print('Start Train')
-        pbar = tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=True)
+        pbar = tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=False)
     model_train.train()
     for iteration, batch in enumerate(gen):
         if iteration >= epoch_step: 

@@ -170,7 +170,7 @@ class EvalCallback():
             if not os.path.exists(pred_dir):
                 os.makedirs(pred_dir)
             print("Get miou.")
-            for image_id in tqdm(self.image_ids, disable=True):
+            for image_id in tqdm(self.image_ids, disable=False):
                 #-------------------------------#
                 #   从文件中读取图像
                 #-------------------------------#
