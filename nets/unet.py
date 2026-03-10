@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from nets.resnet import resnet50
 from nets.vgg import VGG16
-from .legnet import LFE_Module
+
 
 class unetUp(nn.Module):
     def __init__(self, in_size, out_size):
@@ -58,25 +58,6 @@ class Unet(nn.Module):
         self.final = nn.Conv2d(out_filters[0], num_classes, 1)
 
         self.backbone = backbone
-        
-        # --- 新增：为每个 Skip Connection 定义 LFE 增强模块 ---
-        # 这里的 dim 对应 Encoder 输出的通道数
-        # VGG: feat1(64), feat2(128), feat3(256), feat4(512)
-        # ResNet50: feat1(64), feat2(256), feat3(512), feat4(1024)
-        if backbone == 'vgg':
-            feat_channels = [64, 128, 256, 512]
-        else:
-            feat_channels = [64, 256, 512, 1024]
-        # 第一层用 Scharr 提取边缘，后续层用 Gaussian 去噪
-        self.lfe1 = LFE_Module(feat_channels[0], stage=0, mlp_ratio=2, drop_path=0.1, 
-                               act_layer=nn.ReLU, norm_layer=dict(type='BN'))
-        self.lfe2 = LFE_Module(feat_channels[1], stage=1, mlp_ratio=2, drop_path=0.1, 
-                               act_layer=nn.ReLU, norm_layer=dict(type='BN'))
-        self.lfe3 = LFE_Module(feat_channels[2], stage=1, mlp_ratio=2, drop_path=0.1, 
-                               act_layer=nn.ReLU, norm_layer=dict(type='BN'))
-        self.lfe4 = LFE_Module(feat_channels[3], stage=1, mlp_ratio=2, drop_path=0.1, 
-                               act_layer=nn.ReLU, norm_layer=dict(type='BN'))
-        # --------------------------------------------------
 
     def forward(self, inputs):
         if self.backbone == "vgg":
@@ -84,24 +65,16 @@ class Unet(nn.Module):
         elif self.backbone == "resnet50":
             [feat1, feat2, feat3, feat4, feat5] = self.resnet.forward(inputs)
 
-        # --- 新增：在特征融合前进行增强 ---
-        # feat5 是最底层(Bottleneck)，通常不需要处理，或者也可以加一个
-        feat4_e = self.lfe4(feat4)
-        feat3_e = self.lfe3(feat3)
-        feat2_e = self.lfe2(feat2)
-        feat1_e = self.lfe1(feat1)
-        # -------------------------------
+        up4 = self.up_concat4(feat4, feat5)
+        up3 = self.up_concat3(feat3, up4)
+        up2 = self.up_concat2(feat2, up3)
+        up1 = self.up_concat1(feat1, up2)
 
-        # 使用增强后的特征进行上采样融合
-        up4 = self.up_concat4(feat4_e, feat5)
-        up3 = self.up_concat3(feat3_e, up4)
-        up2 = self.up_concat2(feat2_e, up3)
-        up1 = self.up_concat1(feat1_e, up2)
-
-        if self.up_conv is not None:
+        if self.up_conv != None:
             up1 = self.up_conv(up1)
 
         final = self.final(up1)
+        
         return final
 
     def freeze_backbone(self):
