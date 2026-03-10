@@ -17,18 +17,19 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
 
     if local_rank == 0:
         print('Start Train')
-        pbar = tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=True)
+        pbar = tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=False)
     model_train.train()
     for iteration, batch in enumerate(gen):
         if iteration >= epoch_step: 
             break
-        imgs, pngs, labels = batch
+        imgs, pngs, labels, vessels = batch
         with torch.no_grad():
             weights = torch.from_numpy(cls_weights)
             if cuda:
                 imgs    = imgs.cuda(local_rank)
                 pngs    = pngs.cuda(local_rank)
                 labels  = labels.cuda(local_rank)
+                vessels = vessels.cuda(local_rank)
                 weights = weights.cuda(local_rank)
 
         optimizer.zero_grad()
@@ -36,7 +37,7 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
             #----------------------#
             #   前向传播
             #----------------------#
-            outputs = model_train(imgs)
+            outputs = model_train(imgs, vessels)
             #----------------------#
             #   损失计算
             #----------------------#
@@ -107,25 +108,26 @@ def fit_one_epoch(model_train, model, loss_history, eval_callback, optimizer, ep
         pbar.close()
         print('Finish Train')
         print('Start Validation')
-        pbar = tqdm(total=epoch_step_val, desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=True)
+        pbar = tqdm(total=epoch_step_val, desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=False)
 
     model_train.eval()
     for iteration, batch in enumerate(gen_val):
         if iteration >= epoch_step_val:
             break
-        imgs, pngs, labels = batch
+        imgs, pngs, labels, vessels = batch
         with torch.no_grad():
             weights = torch.from_numpy(cls_weights)
             if cuda:
                 imgs    = imgs.cuda(local_rank)
                 pngs    = pngs.cuda(local_rank)
                 labels  = labels.cuda(local_rank)
+                vessels = vessels.cuda(local_rank)
                 weights = weights.cuda(local_rank)
 
             #----------------------#
             #   前向传播
             #----------------------#
-            outputs = model_train(imgs)
+            outputs = model_train(imgs, vessels)
             #----------------------#
             #   损失计算
             #----------------------#
@@ -177,7 +179,7 @@ def fit_one_epoch_no_val(model_train, model, loss_history, optimizer, epoch, epo
     
     if local_rank == 0:
         print('Start Train')
-        pbar = tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=True)
+        pbar = tqdm(total=epoch_step,desc=f'Epoch {epoch + 1}/{Epoch}',postfix=dict,mininterval=0.3, disable=False)
     model_train.train()
     for iteration, batch in enumerate(gen):
         if iteration >= epoch_step: 

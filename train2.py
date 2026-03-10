@@ -57,12 +57,15 @@ def visualize_predictions(model, dataloader, epoch, num_samples=2, save_dir='log
 
             images = data[0]
             masks = data[1]
+            vessels = data[3]
 
             if torch.cuda.is_available():
                 images = images.cuda()
+            if torch.cuda.is_available():
+                vessels = vessels.cuda()
 
             # 1. 获取模型输出
-            outputs = model(images)
+            outputs = model(images, vessels)
             
             # 准备一个列表来存储所有要显示的预测图
             display_preds = []
@@ -185,7 +188,7 @@ if __name__ == "__main__":
     #   一般来讲，网络从0开始的训练效果会很差，因为权值太过随机，特征提取效果不明显，因此非常、非常、非常不建议大家从0开始训练！
     #   如果一定要从0开始，可以了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path  = "miou_out/miou_2026_03_07_09_43_31/best_epoch_weights.pth"
+    model_path  = "miou_out/miou_CBAM_best/best_epoch_weights.pth"
     #-----------------------------------------------------#
     #   input_shape     输入图片的大小，32的倍数
     #-----------------------------------------------------#

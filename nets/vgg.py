@@ -20,16 +20,30 @@ class ChannelAttentionModule(nn.Module):
         maxout = self.shared_MLP(self.max_pool(x))
         return self.sigmoid(avgout + maxout)
 
+import torch.nn.functional as F
 class SpatialAttentionModule(nn.Module):
     def __init__(self):
         super(SpatialAttentionModule, self).__init__()
-        self.conv2d = nn.Conv2d(in_channels=2, out_channels=1, kernel_size=7, stride=1, padding=3)
+        # 因为我们加入了 vessel 频道，所以输入通道从 2 变为 3
+        self.conv2d = nn.Conv2d(in_channels=3, out_channels=1, kernel_size=7, stride=1, padding=3)
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x):
+    def forward(self, x, vessel_prior):
+        # x: [B, C, H, W]
+        # vessel_prior: [B, 1, H, W]
+        
+        # 1. 正常的 CBAM 空间描述子
         avgout = torch.mean(x, dim=1, keepdim=True)
         maxout, _ = torch.max(x, dim=1, keepdim=True)
-        out = torch.cat([avgout, maxout], dim=1)
+        
+        # 2. 将 vessel 先验对齐到当前特征图的大小 (重要：因为特征图在不断下采样)
+        # 使用线性插值将先验图缩小到特征图尺寸
+        prior_resized = F.interpolate(vessel_prior, size=(x.size(2), x.size(3)), mode='bilinear', align_corners=False)
+        
+        # 3. 拼接：平均 + 最大 + 先验
+        out = torch.cat([avgout, maxout, prior_resized], dim=1)
+        
+        # 4. 通过卷积层学习如何融合这三个信息
         out = self.sigmoid(self.conv2d(out))
         return out
 
@@ -39,9 +53,11 @@ class CBAM(nn.Module):
         self.channel_attention = ChannelAttentionModule(channel)
         self.spatial_attention = SpatialAttentionModule()
 
-    def forward(self, x):
+    def forward(self, x, vessel):
+        # 通道注意力保持不变
         out = self.channel_attention(x) * x
-        out = self.spatial_attention(out) * out
+        # 空间注意力现在需要 vessel 参与决策
+        out = self.spatial_attention(out, vessel) * out
         return out
 
 
@@ -69,34 +85,29 @@ class VGGWithCBAM(nn.Module):
             nn.Linear(4096, num_classes),
         )
     
-    def forward(self, x):
-        # 第1阶段：前4层 → CBAM
+    def forward(self, x, vessel):
+        # vessel: [B, 1, H, W], 范围 0-1 的 float32 Tensor
+        
+        # 第1阶段
         feat1 = self.features[:4](x)
-        feat1 = self.cbam1(feat1)
+        feat1 = self.cbam1(feat1, vessel)  # 传入先验
         
-        # 第2阶段：4-9层 → CBAM
+        # 第2阶段
         feat2 = self.features[4:9](feat1)
-        feat2 = self.cbam2(feat2)
+        feat2 = self.cbam2(feat2, vessel)
         
-        # 第3阶段：9-16层 → CBAM
+        # 第3阶段
         feat3 = self.features[9:16](feat2)
-        feat3 = self.cbam3(feat3)
+        feat3 = self.cbam3(feat3, vessel)
         
-        # 第4阶段：16-23层 → CBAM
+        # 第4阶段
         feat4 = self.features[16:23](feat3)
-        feat4 = self.cbam4(feat4)
+        feat4 = self.cbam4(feat4, vessel)
         
-        # 第5阶段：23层到倒数第2层 → CBAM
+        # 第5阶段
         feat5 = self.features[23:-1](feat4)
-        feat5 = self.cbam5(feat5)
+        feat5 = self.cbam5(feat5, vessel)
         
-        # 如果需要分类，继续执行
-        # x = self.avgpool(feat5)
-        # x = torch.flatten(x, 1)
-        # x = self.classifier(x)
-        # return x
-        
-        # 对于UNet编码器，返回多尺度特征
         return [feat1, feat2, feat3, feat4, feat5]
 
 class VGG(nn.Module):

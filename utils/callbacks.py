@@ -112,33 +112,49 @@ class EvalCallback():
                 f.write(str(0))
                 f.write("\n")
 
-    def get_miou_png(self, image):
+    def get_miou_png(self, image, image_id):
         #---------------------------------------------------------#
-        #   在这里将图像转换成RGB图像，防止灰度图在预测时报错。
-        #   代码仅仅支持RGB图像的预测，所有其它类型的图像都会转化成RGB
+        #   在原图处理部分保持不变
         #---------------------------------------------------------#
         image       = cvtColor(image)
         orininal_h  = np.array(image).shape[0]
         orininal_w  = np.array(image).shape[1]
-        #---------------------------------------------------------#
-        #   给图像增加灰条，实现不失真的resize
-        #   也可以直接resize进行识别
-        #---------------------------------------------------------#
+        
         image_data, nw, nh  = resize_image(image, (self.input_shape[1],self.input_shape[0]))
-        #---------------------------------------------------------#
-        #   添加上batch_size维度
-        #---------------------------------------------------------#
         image_data  = np.expand_dims(np.transpose(preprocess_input(np.array(image_data, np.float32)), (2, 0, 1)), 0)
 
+        #---------------------------------------------------------#
+        #   【修改点 3】：读取并处理对应的 Vessel 先验掩码
+        #---------------------------------------------------------#
+        # 注意：请确保这个路径和你的生成脚本路径一致！
+        vessel_path = os.path.join(self.dataset_path, "VOC2007/VesselMasks", image_id + ".png")
+        vessel      = Image.open(vessel_path).convert('L') # 转为单通道灰度图
+        
+        # 1. 缩放 Vessel (必须用 NEAREST，且 nw, nh 和原图保持绝对一致)
+        vessel      = vessel.resize((nw, nh), Image.NEAREST)
+        
+        # 2. 给 Vessel 增加黑条 (背景为 0) 以匹配原图的灰条位置
+        vessel_data = Image.new('L', (self.input_shape[1], self.input_shape[0]), 0)
+        vessel_data.paste(vessel, ((self.input_shape[1]-nw)//2, (self.input_shape[0]-nh)//2))
+        
+        # 3. 转换为 Tensor 需要的形状 [Batch, Channel, H, W] -> [1, 1, 512, 512]
+        # 并将 0-255 归一化到 0-1 的 float32
+        vessel_data = np.array(vessel_data, np.float32) / 255.0
+        vessel_data = np.expand_dims(np.expand_dims(vessel_data, 0), 0)
+
         with torch.no_grad():
-            images = torch.from_numpy(image_data)
+            images  = torch.from_numpy(image_data)
+            vessels = torch.from_numpy(vessel_data) # 转为 Tensor
+            
             if self.cuda:
-                images = images.cuda()
+                images  = images.cuda()
+                vessels = vessels.cuda() # 放到 GPU 上
                 
             #---------------------------------------------------#
-            #   图片传入网络进行预测
+            #   【修改点 4】：图片和先验掩码同时传入网络进行预测
             #---------------------------------------------------#
-            pr = self.net(images)[0]
+            pr = self.net(images, vessels)[0] 
+            
             #---------------------------------------------------#
             #   取出每一个像素点的种类
             #---------------------------------------------------#
@@ -170,7 +186,7 @@ class EvalCallback():
             if not os.path.exists(pred_dir):
                 os.makedirs(pred_dir)
             print("Get miou.")
-            for image_id in tqdm(self.image_ids, disable=True):
+            for image_id in tqdm(self.image_ids, disable=False):
                 #-------------------------------#
                 #   从文件中读取图像
                 #-------------------------------#
@@ -179,7 +195,7 @@ class EvalCallback():
                 #------------------------------#
                 #   获得预测txt
                 #------------------------------#
-                image       = self.get_miou_png(image)
+                image       = self.get_miou_png(image, image_id)
                 image.save(os.path.join(pred_dir, image_id + ".png"))
                         
             print("Calculate miou.")

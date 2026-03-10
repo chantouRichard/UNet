@@ -59,11 +59,11 @@ class Unet(nn.Module):
 
         self.backbone = backbone
 
-    def forward(self, inputs):
+    def forward(self, inputs, vessels):
         if self.backbone == "vgg":
-            [feat1, feat2, feat3, feat4, feat5] = self.vgg.forward(inputs)
+            [feat1, feat2, feat3, feat4, feat5] = self.vgg.forward(inputs, vessels)
         elif self.backbone == "resnet50":
-            [feat1, feat2, feat3, feat4, feat5] = self.resnet.forward(inputs)
+            [feat1, feat2, feat3, feat4, feat5] = self.resnet.forward(inputs, vessels)
 
         up4 = self.up_concat4(feat4, feat5)
         up3 = self.up_concat3(feat3, up4)
