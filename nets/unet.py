@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from nets.resnet import resnet50
 from nets.vgg import VGG16
-
+from .lwganet import LWGA_Block
 
 class unetUp(nn.Module):
     def __init__(self, in_size, out_size):
@@ -58,6 +58,8 @@ class Unet(nn.Module):
         self.final = nn.Conv2d(out_filters[0], num_classes, 1)
 
         self.backbone = backbone
+        
+        self.lwga_bottleneck = LWGA_Block(in_channels=512)
 
     def forward(self, inputs):
         if self.backbone == "vgg":
@@ -66,6 +68,7 @@ class Unet(nn.Module):
             [feat1, feat2, feat3, feat4, feat5] = self.resnet.forward(inputs)
 
         up4 = self.up_concat4(feat4, feat5)
+        up4 = self.lwga_bottleneck(up4)
         up3 = self.up_concat3(feat3, up4)
         up2 = self.up_concat2(feat2, up3)
         up1 = self.up_concat1(feat1, up2)
