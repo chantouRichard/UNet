@@ -9,7 +9,7 @@ import torch.distributed as dist
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from nets.unet import Unet
+from nets.unet import Unet, TwoStageUnet
 from nets.unet_training import get_lr_scheduler, set_optimizer_lr, weights_init
 from utils.callbacks import EvalCallback, LossHistory
 from utils.dataloader import UnetDataset, unet_dataset_collate
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     #   一般来讲，网络从0开始的训练效果会很差，因为权值太过随机，特征提取效果不明显，因此非常、非常、非常不建议大家从0开始训练！
     #   如果一定要从0开始，可以了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path  = "miou_out/miou_CBAM_best/best_epoch_weights.pth"
+    model_path  = "miou_out/miou_CBAM_after/best_epoch_weights.pth"
     #-----------------------------------------------------#
     #   input_shape     输入图片的大小，32的倍数
     #-----------------------------------------------------#
@@ -356,7 +356,7 @@ if __name__ == "__main__":
         else:
             download_weights(backbone)
 
-    model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone).train()
+    model = TwoStageUnet(num_classes=num_classes, pretrained=pretrained, backbone=backbone).train()
     if not pretrained:
         weights_init(model)
     if model_path != '':
@@ -461,7 +461,7 @@ if __name__ == "__main__":
         #   冻结一定部分训练
         #------------------------------------#
         if Freeze_Train:
-            model.freeze_backbone()
+            model.freeze_all_but_coarse()
             
         #-------------------------------------------------------------------#
         #   如果不冻结训练的话，直接设置batch_size为Unfreeze_batch_size
@@ -533,9 +533,9 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
-        CBAM_WARMUP_EPOCHS = 4      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 12 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
+        CBAM_WARMUP_EPOCHS = 5      # 前5epoch只训CBAM
+        PARTIAL_UNFREEZE_EPOCHS = 15 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 40    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, FULL_UNFREEZE_EPOCHS):
             #---------------------------------------#
             #   如果模型有冻结学习部分
@@ -546,7 +546,7 @@ if __name__ == "__main__":
             #---------------------------------------#
             if epoch == Init_Epoch:  # 第一个epoch
                 print("\n阶段1: 冻结VGG全部，只训练CBAM和解码器")
-                model.freeze_backbone()  # 冻结VGG
+                model.freeze_all_but_coarse()  # 冻结VGG
                 model.set_cbam_trainable(True)  # CBAM可训练
                 
             elif epoch == CBAM_WARMUP_EPOCHS and Freeze_Train:
@@ -555,7 +555,7 @@ if __name__ == "__main__":
                 model.set_cbam_trainable(True)  # CBAM继续训练
             elif epoch >= PARTIAL_UNFREEZE_EPOCHS and not UnFreeze_flag and Freeze_Train:
                 print("\n阶段3: 全部解冻，整体微调")
-                model.unfreeze_backbone()  # 完全解冻VGG
+                model.unfreeze_all()  # 完全解冻VGG
                 model.set_cbam_trainable(True)  # CBAM继续训练
                 batch_size = Unfreeze_batch_size
 
