@@ -4,6 +4,7 @@ import torch.nn as nn
 from nets.resnet import resnet50
 from nets.vgg import VGG16
 
+from nets.ASPP import ASPP
 
 class unetUp(nn.Module):
     def __init__(self, in_size, out_size):
@@ -58,6 +59,8 @@ class Unet(nn.Module):
         self.final = nn.Conv2d(out_filters[0], num_classes, 1)
 
         self.backbone = backbone
+        
+        self.aspp = ASPP(dim_in=512, dim_out=out_filters[3], rate=1, bn_mom=0.1)
 
     def forward(self, inputs):
         if self.backbone == "vgg":
@@ -65,7 +68,11 @@ class Unet(nn.Module):
         elif self.backbone == "resnet50":
             [feat1, feat2, feat3, feat4, feat5] = self.resnet.forward(inputs)
 
-        up4 = self.up_concat4(feat4, feat5)
+        # ---------- 在bottleneck处应用ASPP ----------
+        # 对最深层的特征feat5进行多尺度上下文提取
+        feat5_aspp = self.aspp(feat5)
+        
+        up4 = self.up_concat4(feat4, feat5_aspp)
         up3 = self.up_concat3(feat3, up4)
         up2 = self.up_concat2(feat2, up3)
         up1 = self.up_concat1(feat1, up2)
