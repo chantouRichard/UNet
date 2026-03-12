@@ -59,7 +59,7 @@ class Unet(nn.Module):
 
         self.backbone = backbone
         
-        self.lwga_bottleneck = LWGA_Block(in_channels=512)
+        self.lwga_bottleneck = LWGA_Block(512, 1, 11, 2, 0.1)
 
     def forward(self, inputs):
         if self.backbone == "vgg":
@@ -67,8 +67,8 @@ class Unet(nn.Module):
         elif self.backbone == "resnet50":
             [feat1, feat2, feat3, feat4, feat5] = self.resnet.forward(inputs)
 
+        feat5 = self.lwga_bottleneck(feat5)
         up4 = self.up_concat4(feat4, feat5)
-        up4 = self.lwga_bottleneck(up4)
         up3 = self.up_concat3(feat3, up4)
         up2 = self.up_concat2(feat2, up3)
         up1 = self.up_concat1(feat1, up2)
@@ -114,3 +114,18 @@ class Unet(nn.Module):
                     print(f"解冻高层: {name}")
                 else:
                     param.requires_grad = False
+                    
+    # 在 Unet 类定义中添加
+    def set_all_trainable(self):
+        """解冻整个模型的所有参数"""
+        for param in self.parameters():
+            param.requires_grad = True
+        print("已解冻全模型，开始整体微调。")
+
+    def set_only_new_modules_trainable(self):
+        """只允许新模块训练（初始阶段使用）"""
+        for name, param in self.named_parameters():
+            if "lwga" in name or "lfe" in name:
+                param.requires_grad = True
+            else:
+                param.requires_grad = False

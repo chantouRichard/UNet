@@ -185,7 +185,7 @@ if __name__ == "__main__":
     #   一般来讲，网络从0开始的训练效果会很差，因为权值太过随机，特征提取效果不明显，因此非常、非常、非常不建议大家从0开始训练！
     #   如果一定要从0开始，可以了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path  = "miou_out/miou_CBAM_best/best_epoch_weights.pth"
+    model_path  = "miou_out/miou_CBAM_Best/best_epoch_weights.pth"
     #-----------------------------------------------------#
     #   input_shape     输入图片的大小，32的倍数
     #-----------------------------------------------------#
@@ -380,6 +380,27 @@ if __name__ == "__main__":
                 no_load_key.append(k)
         model_dict.update(temp_dict)
         model.load_state_dict(model_dict)
+        
+        # ------------------------------------------------------#
+        #   新增：冻结旧参数，只训练 LWGA 模块
+        # ------------------------------------------------------#
+        if local_rank == 0:
+            print("\n开始冻结旧参数，仅保留新模块进行训练...")
+
+        # 遍历模型的所有参数
+        for name, param in model.named_parameters():
+            # 这里请根据你新模块的变量名修改，比如 "lwga" 或 "lfe"
+            # 如果你同时加了这两个，可以用: if "lwga" in name or "lfe" in name:
+            if "lwga" in name or "lfe" in name:
+                param.requires_grad = True  # 新模块参与训练
+            else:
+                param.requires_grad = False # 旧的 UNet+CBAM 参数全部锁定
+        
+        # 打印一下哪些层正在训练，方便确认
+        if local_rank == 0:
+            train_params = [n for n, p in model.named_parameters() if p.requires_grad]
+            print("正在训练的层:", train_params)
+        # ------------------------------------------------------#
         #------------------------------------------------------#
         #   显示没有匹配上的Key
         #------------------------------------------------------#
@@ -534,7 +555,7 @@ if __name__ == "__main__":
         #   开始模型训练
         #---------------------------------------#
         CBAM_WARMUP_EPOCHS = 4      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 12 # 5-20epoch部分解冻
+        PARTIAL_UNFREEZE_EPOCHS = 10 # 5-20epoch部分解冻
         FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, FULL_UNFREEZE_EPOCHS):
             #---------------------------------------#
@@ -546,17 +567,19 @@ if __name__ == "__main__":
             #---------------------------------------#
             if epoch == Init_Epoch:  # 第一个epoch
                 print("\n阶段1: 冻结VGG全部，只训练CBAM和解码器")
-                model.freeze_backbone()  # 冻结VGG
-                model.set_cbam_trainable(True)  # CBAM可训练
+                # model.freeze_backbone()  # 冻结VGG
+                # model.set_cbam_trainable(True)  # CBAM可训练
+                model.set_only_new_modules_trainable()  # 只训练新模块（LWGA和LFE）
                 
-            elif epoch == CBAM_WARMUP_EPOCHS and Freeze_Train:
-                print("\n阶段2: 部分解冻VGG高层，联合训练")
-                model.set_backbone_partial_unfreeze()  # 部分解冻VGG
-                model.set_cbam_trainable(True)  # CBAM继续训练
+            # elif epoch == CBAM_WARMUP_EPOCHS and Freeze_Train:
+            #     print("\n阶段2: 部分解冻VGG高层，联合训练")
+            #     model.set_backbone_partial_unfreeze()  # 部分解冻VGG
+            #     model.set_cbam_trainable(True)  # CBAM继续训练
             elif epoch >= PARTIAL_UNFREEZE_EPOCHS and not UnFreeze_flag and Freeze_Train:
                 print("\n阶段3: 全部解冻，整体微调")
                 model.unfreeze_backbone()  # 完全解冻VGG
                 model.set_cbam_trainable(True)  # CBAM继续训练
+                model.set_all_trainable()  # 所有参数都可训练
                 batch_size = Unfreeze_batch_size
 
                 #-------------------------------------------------------------------#
