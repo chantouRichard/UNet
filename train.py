@@ -9,7 +9,7 @@ import torch.distributed as dist
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from nets.unet import Unet, TwoStageUnet
+from nets.unet import Unet
 from nets.unet_training import get_lr_scheduler, set_optimizer_lr, weights_init
 from utils.callbacks import EvalCallback, LossHistory
 from utils.dataloader import UnetDataset, unet_dataset_collate
@@ -344,7 +344,7 @@ if __name__ == "__main__":
         else:
             download_weights(backbone)
 
-    model = TwoStageUnet(num_classes=num_classes, pretrained=pretrained, backbone=backbone).train()
+    model = Unet(num_classes=num_classes, pretrained=pretrained, backbone=backbone).train()
     if not pretrained:
         weights_init(model)
     if model_path != '':

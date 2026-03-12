@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from PIL import Image
 from torch import nn
 
-from nets.unet import TwoStageUnet as unet
+from nets.unet import Unet as unet
 from utils.utils import cvtColor, preprocess_input, resize_image, show_config
 
 
