@@ -61,6 +61,8 @@ class Unet(nn.Module):
         self.backbone = backbone
         
         self.aspp = ASPP(dim_in=512, dim_out=out_filters[3], rate=1, bn_mom=0.1)
+        
+        self.has_aspp = True  # 标记是否使用了ASPP
 
     def forward(self, inputs):
         if self.backbone == "vgg":
@@ -85,36 +87,76 @@ class Unet(nn.Module):
         return final
 
     def freeze_backbone(self):
+        """冻结backbone，但保持ASPP和decoder可训练"""
         if self.backbone == "vgg":
             for param in self.vgg.parameters():
                 param.requires_grad = False
         elif self.backbone == "resnet50":
             for param in self.resnet.parameters():
                 param.requires_grad = False
+        
+        # 确保ASPP是训练状态（如果存在）
+        if hasattr(self, 'aspp'):
+            for param in self.aspp.parameters():
+                param.requires_grad = True
+            print("ASPP保持训练状态")
 
     def unfreeze_backbone(self):
+        """解冻所有参数"""
         if self.backbone == "vgg":
             for param in self.vgg.parameters():
                 param.requires_grad = True
         elif self.backbone == "resnet50":
             for param in self.resnet.parameters():
+                param.requires_grad = True
+        
+        # 确保ASPP是训练状态
+        if hasattr(self, 'aspp'):
+            for param in self.aspp.parameters():
                 param.requires_grad = True
 
     def set_cbam_trainable(self, trainable=True):
-        """设置CBAM模块是否可训练"""
+        """设置CBAM模块是否可训练（如果存在的话）"""
+        found = False
         for name, param in self.named_parameters():
             if 'cbam' in name.lower() or 'attention' in name.lower():
                 param.requires_grad = trainable
                 print(f"{'训练' if trainable else '冻结'}: {name}")
+                found = True
+        
+        # 可以顺便打印ASPP状态
+        if hasattr(self, 'aspp'):
+            print(f"ASPP模块默认是可训练的")
+        
+        if not found:
+            print("未找到CBAM模块")
 
     def set_backbone_partial_unfreeze(self):
         """部分解冻VGG的高层（最后几层）"""
         if self.backbone == "vgg":
             # VGG有31层（0-30），解冻最后8层（23-30）
+            unfrozen_count = 0
             for i, (name, param) in enumerate(self.vgg.named_parameters()):
                 # 解冻features中后8层的参数
                 if i >= 23:  # 最后8层
                     param.requires_grad = True
                     print(f"解冻高层: {name}")
+                    unfrozen_count += 1
                 else:
                     param.requires_grad = False
+            print(f"已解冻VGG最后 {unfrozen_count} 个参数组")
+            
+        elif self.backbone == "resnet50":
+            # 对于ResNet，可以解冻layer4和layer3
+            print("解冻ResNet的layer3和layer4")
+            for name, param in self.resnet.named_parameters():
+                if 'layer4' in name or 'layer3' in name:
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
+        
+        # ASPP保持可训练
+        if hasattr(self, 'aspp'):
+            for param in self.aspp.parameters():
+                param.requires_grad = True
+            print("ASPP保持训练状态")
