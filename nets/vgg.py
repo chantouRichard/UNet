@@ -161,12 +161,35 @@ cfgs = {
 }
 
 
-def VGG16(pretrained, in_channels = 3, **kwargs):
-    # model = VGG(make_layers(cfgs["D"], batch_norm = False, in_channels = in_channels), **kwargs)
-    model = VGGWithCBAM(make_layers(cfgs["D"], batch_norm = False, in_channels = in_channels), **kwargs)
+def VGG16(pretrained, in_channels=4, **kwargs):
+    # 1. 按照传入的 in_channels (比如 4) 初始化模型
+    model = VGGWithCBAM(make_layers(cfgs["D"], batch_norm=False, in_channels=in_channels), **kwargs)
+    
     if pretrained:
+        # 下载官方 3 通道预训练权重
         state_dict = load_state_dict_from_url("https://download.pytorch.org/models/vgg16-397923af.pth", model_dir="./model_data")
-        model.load_state_dict(state_dict)
+        
+        # 2. 核心处理：适配 4 通道权重
+        if in_channels != 3:
+            # 提取官方预训练的第一层卷积权重: shape (64, 3, 3, 3)
+            conv1_weight = state_dict['features.0.weight']
+            
+            # 创建新的权重 tensor: shape (64, 4, 3, 3)
+            new_conv1_weight = torch.zeros((64, in_channels, 3, 3))
+            
+            # 前 3 个通道完美继承官方 RGB 权重
+            new_conv1_weight[:, :3, :, :] = conv1_weight
+            
+            # 第 4 个通道 (Mask) 使用前 3 个通道的均值初始化，帮助网络快速适应
+            new_conv1_weight[:, 3:, :, :] = conv1_weight.mean(dim=1, keepdim=True)
+            
+            # 替换回 state_dict
+            state_dict['features.0.weight'] = new_conv1_weight
+            
+        # 3. 加载权重
+        # 注意：因为你加了 CBAM，原本的 state_dict 里没有 CBAM 的参数
+        # 所以必须加 strict=False，忽略没有匹配上的层
+        model.load_state_dict(state_dict, strict=False)
     
     del model.avgpool
     del model.classifier

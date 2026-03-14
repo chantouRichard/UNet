@@ -22,14 +22,17 @@ class unetUp(nn.Module):
         return outputs
 
 class Unet(nn.Module):
-    def __init__(self, num_classes = 21, pretrained = False, backbone = 'vgg'):
+    # 增加 in_channels 参数，默认改为 4 (如果你现在主打 4 通道输入)
+    def __init__(self, num_classes=21, pretrained=False, backbone='vgg', in_channels=4):
         super(Unet, self).__init__()
         if backbone == 'vgg':
-            self.vgg    = VGG16(pretrained = pretrained)
-            in_filters  = [192, 384, 768, 1024]
+            # 将 in_channels 传给 VGG16
+            self.vgg = VGG16(pretrained=pretrained, in_channels=in_channels)
+            in_filters = [192, 384, 768, 1024]
         elif backbone == "resnet50":
-            self.resnet = resnet50(pretrained = pretrained)
-            in_filters  = [192, 512, 1024, 3072]
+            # 如果以后用 resnet，同样需要去改 resnet 的源码适配 4 通道
+            self.resnet = resnet50(pretrained=pretrained)
+            in_filters = [192, 512, 1024, 3072]
         else:
             raise ValueError('Unsupported backbone - `{}`, Use vgg, resnet50.'.format(backbone))
         out_filters = [64, 128, 256, 512]

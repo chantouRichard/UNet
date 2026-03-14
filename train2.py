@@ -533,9 +533,9 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   开始模型训练
         #---------------------------------------#
-        CBAM_WARMUP_EPOCHS = 4      # 前5epoch只训CBAM
-        PARTIAL_UNFREEZE_EPOCHS = 12 # 5-20epoch部分解冻
-        FULL_UNFREEZE_EPOCHS = 30    # 20-40epoch全部解冻
+        CBAM_WARMUP_EPOCHS = 6      # 前5epoch只训CBAM
+        PARTIAL_UNFREEZE_EPOCHS = 20 # 5-20epoch部分解冻
+        FULL_UNFREEZE_EPOCHS = 50    # 20-40epoch全部解冻
         for epoch in range(Init_Epoch, FULL_UNFREEZE_EPOCHS):
             #---------------------------------------#
             #   如果模型有冻结学习部分
