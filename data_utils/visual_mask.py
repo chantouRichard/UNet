@@ -28,7 +28,7 @@ def visualize_segmentation(image_path, mask_path, save_dir=None, show=True, alph
 
     # 创建彩色掩码（红色）
     colored_mask = np.zeros((*mask.shape, 3), dtype=np.uint8)
-    colored_mask[mask > 0] = [255, 0, 0]  # 这里可改为 [0, 255, 0] 绿色
+    colored_mask[mask > 0] = [255, 255, 255]  # 这里可改为 [0, 255, 0] 绿色
 
     # 混合显示
     overlay = cv2.addWeighted(image_rgb, 1 - alpha, colored_mask, alpha, 0)
@@ -71,12 +71,12 @@ def batch_visualize(img_folder, mask_folder, save_dir=None, show=False):
 # --- 使用示例 ---
 
 # 1. 单张图片可视化 (只显示不保存)
-# visualize_segmentation(
-#     image_path=r"VOCdevkit\\VOC2007\\img\\0001.png",
-#     mask_path=r"VOCdevkit\\VOC2007\\masks\\0001.png",
-#     save_dir=None, 
-#     show=True
-# )
+visualize_segmentation(
+    image_path=r"VOCdevkit\\VOC2007-virtual\\JPEGImages\\0001_000.jpg",
+    mask_path=r"VOCdevkit\\VOC2007-virtual\\SegmentationClass\\0001_000.png",
+    save_dir=None, 
+    show=True
+)
 
 # 2. 批量处理并保存 (不显示，直接存入目标文件夹)
 # IMG_DIR = r"img\\img_aug\\JPEGImages"

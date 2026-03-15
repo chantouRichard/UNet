@@ -31,7 +31,7 @@ class LossHistory():
         os.makedirs(self.log_dir)
         self.writer     = SummaryWriter(self.log_dir)
         try:
-            dummy_input     = torch.randn(2, 3, input_shape[0], input_shape[1])
+            dummy_input     = torch.randn(2, 4, input_shape[0], input_shape[1])
             self.writer.add_graph(model, dummy_input)
         except:
             pass
@@ -112,23 +112,42 @@ class EvalCallback():
                 f.write(str(0))
                 f.write("\n")
 
-    def get_miou_png(self, image):
+    def get_miou_png(self, image, image_id):
         #---------------------------------------------------------#
-        #   在这里将图像转换成RGB图像，防止灰度图在预测时报错。
-        #   代码仅仅支持RGB图像的预测，所有其它类型的图像都会转化成RGB
+        #   在原图上操作：转换 RGB、获取原图宽高
         #---------------------------------------------------------#
         image       = cvtColor(image)
         orininal_h  = np.array(image).shape[0]
         orininal_w  = np.array(image).shape[1]
+        
+        # 获取 resize_image 返回的加灰条后的图片及其实际缩放尺寸 nw, nh
+        image_data, nw, nh  = resize_image(image, (self.input_shape[1], self.input_shape[0]))
+        # 预处理并转为 NumPy (H, W, 3)
+        image_data_np       = preprocess_input(np.array(image_data, np.float32))
+
         #---------------------------------------------------------#
-        #   给图像增加灰条，实现不失真的resize
-        #   也可以直接resize进行识别
+        #   【新增】读取并处理 Vessel 掩码图
+        #   注意：根据你下面 on_epoch_end 的路径，这里要读 VOC2007-real
         #---------------------------------------------------------#
-        image_data, nw, nh  = resize_image(image, (self.input_shape[1],self.input_shape[0]))
+        vessel_path = os.path.join(self.dataset_path, f"VOC2007-real/Vessel_Only/{image_id}.png")
+        vessel      = Image.open(vessel_path).convert('L')
+        
+        # 关键：严格使用原图计算出的 nw 和 nh 来缩放掩码，确保完全对齐
+        vessel      = vessel.resize((nw, nh), Image.NEAREST)
+        new_vessel  = Image.new('L', (self.input_shape[1], self.input_shape[0]), (0)) # 用 0(黑边) 填充多余部分
+        new_vessel.paste(vessel, ((self.input_shape[1]-nw)//2, (self.input_shape[0]-nh)//2))
+        
+        # 归一化并扩充维度到 (H, W, 1)
+        vessel_data_np = np.array(new_vessel, np.float32) / 255.0
+        vessel_data_np = np.expand_dims(vessel_data_np, axis=-1)
+
         #---------------------------------------------------------#
-        #   添加上batch_size维度
+        #   将 (H, W, 3) 和 (H, W, 1) 在通道维拼接成 (H, W, 4)
         #---------------------------------------------------------#
-        image_data  = np.expand_dims(np.transpose(preprocess_input(np.array(image_data, np.float32)), (2, 0, 1)), 0)
+        concat_data = np.concatenate([image_data_np, vessel_data_np], axis=-1)
+        
+        # 转化为 PyTorch 需要的 (1, 4, H, W) 形状
+        image_data  = np.expand_dims(np.transpose(concat_data, (2, 0, 1)), 0)
 
         with torch.no_grad():
             images = torch.from_numpy(image_data)
@@ -136,7 +155,7 @@ class EvalCallback():
                 images = images.cuda()
                 
             #---------------------------------------------------#
-            #   图片传入网络进行预测
+            #   图片传入 4 通道网络进行预测
             #---------------------------------------------------#
             pr = self.net(images)[0]
             #---------------------------------------------------#
@@ -144,17 +163,14 @@ class EvalCallback():
             #---------------------------------------------------#
             pr = F.softmax(pr.permute(1,2,0),dim = -1).cpu().numpy()
             #--------------------------------------#
-            #   将灰条部分截取掉
+            #   将灰条/黑条部分截取掉，恢复原图比例
             #--------------------------------------#
             pr = pr[int((self.input_shape[0] - nh) // 2) : int((self.input_shape[0] - nh) // 2 + nh), \
                     int((self.input_shape[1] - nw) // 2) : int((self.input_shape[1] - nw) // 2 + nw)]
             #---------------------------------------------------#
-            #   进行图片的resize
+            #   进行图片的resize，还原回原始输入分辨率
             #---------------------------------------------------#
             pr = cv2.resize(pr, (orininal_w, orininal_h), interpolation = cv2.INTER_LINEAR)
-            #---------------------------------------------------#
-            #   取出每一个像素点的种类
-            #---------------------------------------------------#
             pr = pr.argmax(axis=-1)
     
         image = Image.fromarray(np.uint8(pr))
@@ -172,14 +188,15 @@ class EvalCallback():
             print("Get miou.")
             for image_id in tqdm(self.image_ids, disable=True):
                 #-------------------------------#
-                #   从文件中读取图像
+                #   从 VOC2007-real 中读取图像
                 #-------------------------------#
-                image_path  = os.path.join(self.dataset_path, "VOC2007/JPEGImages/"+image_id+".jpg")
+                image_path  = os.path.join(self.dataset_path, "VOC2007-real/JPEGImages/"+image_id+".jpg")
                 image       = Image.open(image_path)
+                
                 #------------------------------#
-                #   获得预测txt
+                #   【修改点】传入 image_id
                 #------------------------------#
-                image       = self.get_miou_png(image)
+                image       = self.get_miou_png(image, image_id)
                 image.save(os.path.join(pred_dir, image_id + ".png"))
                         
             print("Calculate miou.")
