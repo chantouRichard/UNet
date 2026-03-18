@@ -61,8 +61,8 @@ if __name__ == "__main__":
     #   
     #   dir_origin_path和dir_save_path仅在mode='dir_predict'时有效
     #-------------------------------------------------------------------------#
-    dir_origin_path = "img/bridge_origin"
-    dir_save_path   = "img/bridge_predict"
+    dir_origin_path = "E:\\06_Temporary\\data_bridge_new\\img - copy"
+    dir_save_path   = "E:\\06_Temporary\\data_bridge_new\\img - copy_out"
     #-------------------------------------------------------------------------#
     #   simplify            使用Simplify onnx
     #   onnx_save_path      指定了onnx的保存路径
