@@ -242,18 +242,22 @@ def draw_gradient_thickness_line(img, pt1, pt2, thick1, thick2, color=255):
 
 
 # ==========================================
-# 核心函数：中心双向延伸探测修复 (支持透视渐变)
+# 核心函数：中心双向延伸探测修复 (支持透视渐变 + 自适应密集度 + 🟢严格线段过滤)
 # ==========================================
-def ray_cast_midpoint_healing(binary_mask, skeleton, extend_ratio=0.1, hit_threshold=1):
-    print("📍 正在生成距离变换图与划分连通域...")
+def ray_cast_midpoint_healing(binary_mask, skeleton, hit_threshold=1):
+    # print("📍 正在生成距离变换图与划分连通域...")
     binary_255 = (binary_mask > 0).astype(np.uint8) * 255
     dist_map = cv2.distanceTransform(binary_255, cv2.DIST_L2, 5)
+    
+    bg_255 = (binary_mask == 0).astype(np.uint8) * 255
+    bg_dist_map = cv2.distanceTransform(bg_255, cv2.DIST_L2, 5)
     
     skel_8u = (skeleton > 0).astype(np.uint8)
     num_labels, labels = cv2.connectedComponents(skel_8u, connectivity=8)
     
     healed_mask = binary_255.copy()
     success_count = 0
+    skipped_messy_count = 0  # 记录剔除了多少个毛线团
     
     for label_id in range(1, num_labels):
         comp_mask = (labels == label_id).astype(np.uint8)
@@ -263,16 +267,54 @@ def ray_cast_midpoint_healing(binary_mask, skeleton, extend_ratio=0.1, hit_thres
         if segment_len < 5:
             continue
             
+        # ==================================================
+        # 🟢 新增防御机制：严格线段过滤 (过滤圈圈绕绕的毛线团)
+        # ==================================================
+        endpoints = find_endpoints(comp_mask)
+        
+        # 规则 1：拓扑异常过滤。严格线段端点应为 2 (允许容错到 3~4 以兼容轻微毛刺)
+        if len(endpoints) < 2 or len(endpoints) > 4:
+            skipped_messy_count += 1
+            continue
+            
+        # 规则 2：弯曲度检测 (两端点最大直线距离 vs 骨架总像素路程)
+        max_edist = 0
+        for i in range(len(endpoints)):
+            for j in range(i+1, len(endpoints)):
+                d = np.hypot(endpoints[i][0] - endpoints[j][0], endpoints[i][1] - endpoints[j][1])
+                if d > max_edist:
+                    max_edist = d
+                    
+        # 如果两端点的直线距离还不到走过像素数量的 50%，说明它在严重绕路/折叠！
+        if max_edist / segment_len < 0.8:
+            skipped_messy_count += 1
+            continue
+        # ==================================================
+            
+        # (后续代码保持不变)
         pts = np.column_stack((xs, ys)).astype(np.float32)
         [vx, vy, cx, cy] = cv2.fitLine(pts, cv2.DIST_L2, 0, 0.01, 0.01)
         dir_x, dir_y = vx[0], vy[0]
         
         mid_x, mid_y = int(np.round(cx[0])), int(np.round(cy[0]))
-        
-        # 🟢 获取发射点(中点)的粗细
         source_thickness = max(1, int(np.round(dist_map[mid_y, mid_x] * 2)))
         
-        ray_len = segment_len * (0.5 + extend_ratio)
+        half_w = 20
+        y1, y2 = max(0, mid_y - half_w), min(bg_dist_map.shape[0], mid_y + half_w)
+        x1, x2 = max(0, mid_x - half_w), min(bg_dist_map.shape[1], mid_x + half_w)
+        
+        local_bg_window = bg_dist_map[y1:y2, x1:x2]
+        valid_gaps = local_bg_window[(local_bg_window > 0) & (local_bg_window < 50)]
+        
+        if len(valid_gaps) > 0:
+            mean_gap = np.mean(valid_gaps)
+        else:
+            mean_gap = 50.0  
+            
+        dynamic_ratio = 0.05 + ((mean_gap - 5.0) / 100.0) * 0.20
+        dynamic_ratio = np.clip(dynamic_ratio, 0.05, 0.35)
+        
+        ray_len = segment_len * (0.5 + dynamic_ratio)
         directions = [(dir_x, dir_y), (-dir_x, -dir_y)]
         
         for dx, dy in directions:
@@ -296,15 +338,13 @@ def ray_cast_midpoint_healing(binary_mask, skeleton, extend_ratio=0.1, hit_thres
                 if encountered_label > 0 and encountered_label != label_id:
                     hits += 1
                     if hits >= hit_threshold:
-                        target_point = (c, r) # 注意这里把 (x, y) 存下来
+                        target_point = (c, r)
                         break 
                         
             if target_point is not None:
                 hit_x, hit_y = target_point
-                # 🟢 获取命中点(远端)的真实粗细
                 target_thickness = max(1, int(np.round(dist_map[hit_y, hit_x] * 2)))
                 
-                # 🟢 使用透视梯形画笔！
                 draw_gradient_thickness_line(healed_mask, 
                                              pt1=(mid_x, mid_y), 
                                              pt2=(hit_x, hit_y), 
@@ -313,7 +353,7 @@ def ray_cast_midpoint_healing(binary_mask, skeleton, extend_ratio=0.1, hit_thres
                                              color=255)
                 success_count += 1
                 
-    print(f"✅ 中心双向探测完毕！共触发了 {success_count} 次自适应透视延伸。")
+    # print(f"✅ 探测完毕！成功缝合 {success_count} 处。拦截并跳过了 {skipped_messy_count} 个绕圈毛线团。")
     return healed_mask
 
 # ==========================================
@@ -426,6 +466,67 @@ def calculate_iou(pred_mask, gt_mask):
         return 1.0 if intersection == 0 else 0.0
         
     return intersection / union
+
+import torch
+def postprocess_rope_mask(mask, close_ksize=3, min_area=50):
+    """
+    传统形态学后处理管道：连结绳索断裂 + 滤除孤立噪点
+    
+    参数:
+        mask (np.ndarray): 输入的二值掩码图，形状为 (H, W)，值域必须是 0 和 1。
+        close_ksize (int): 闭运算的核大小(必须是奇数)。越大能连接越宽的断裂，但太大会导致相邻绳索粘连。
+        min_area (int): 最小连通域面积阈值。小于该像素数的孤立短小线段将被抹除。
+        
+    返回:
+        np.ndarray: 处理后的二值掩码图，值域为 0 和 1，类型为 np.float32 (方便后续转 tensor)。
+    """
+    
+    # 1. 安全校验与类型转换 (OpenCV 需要 uint8 格式，且 255 表示高亮)
+    if isinstance(mask, torch.Tensor):
+        # 如果你传入的是 tensor，先转为 numpy
+        mask = mask.detach().cpu().numpy()
+        
+    # 去除多余的维度 (比如从 [1, 1, H, W] 变成 [H, W])
+    mask = np.squeeze(mask) 
+    
+    # 确保转换为 0 和 255 的 uint8 格式
+    mask_255 = (mask > 0.5).astype(np.uint8) * 255
+
+    # ==========================================
+    # 步骤 A: 闭运算 (连接断裂)
+    # ==========================================
+    # 💡 核心技巧：使用“椭圆核(ELLIPSE)”而不是默认的“方形核(RECT)”
+    # 绳索是弯曲的管状物，椭圆核能更好地保持绳索边缘的平滑度，减少锯齿。
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_ksize, close_ksize))
+    
+    # 执行闭运算 (先膨胀后腐蚀)
+    closed_mask = cv2.morphologyEx(mask_255, cv2.MORPH_CLOSE, kernel)
+
+    # ==========================================
+    # 步骤 B: 连通域分析 (清理噪点)
+    # ==========================================
+    # 找出图中所有独立的连通区块
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(closed_mask, connectivity=8)
+
+    # 创建一个全黑的画布，准备只把合格的绳索画上去
+    cleaned_mask = np.zeros_like(closed_mask)
+
+    # 遍历所有连通域 (跳过 i=0，因为 0 是背景)
+    for i in range(1, num_labels):
+        area = stats[i, cv2.CC_STAT_AREA] # 获取该连通块的像素面积
+        
+        # 如果面积大于设定的阈值，说明是真正的绳索，保留它！
+        if area >= min_area:
+            cleaned_mask[labels == i] = 255
+
+    # ==========================================
+    # 步骤 C: 还原格式
+    # ==========================================
+    # 转换回 0.0 和 1.0
+    final_mask = (cleaned_mask > 0).astype(np.float32)
+
+    return final_mask
+
 # 获取所有预测结果的图片路径
 pred_paths = glob.glob(os.path.join(pred_dir, "*.png"))
 
@@ -472,7 +573,9 @@ for pred_path in tqdm(pred_paths, desc="Processing Images"):
     # [步骤 C] 执行透视中心射线缝合
     # ----------------------------------------
     # extend_ratio=0.1 即前后各伸长 1/5
-    healed_mask = ray_cast_midpoint_healing(binary, skeleton, extend_ratio=0.1, hit_threshold=1)
+    healed_mask = ray_cast_midpoint_healing(binary, skeleton, hit_threshold=1)
+    
+    healed_mask = postprocess_rope_mask(healed_mask, close_ksize=3, min_area=50)
     
     # ----------------------------------------
     # [步骤 D] 计算 IoU
@@ -483,6 +586,9 @@ for pred_path in tqdm(pred_paths, desc="Processing Images"):
     iou_before_list.append(iou_b)
     iou_after_list.append(iou_a)
     processed_count += 1
+    
+    if iou_b - iou_a > 0.001:
+        print(f"\n⚠️ 注意！{base_name} 的 IoU 从 {iou_b:.4f} 下降到 {iou_a:.4f}，可能是过度修复了。")
     
     # ----------------------------------------
     # [步骤 E] 绘制并保存三联对比图
