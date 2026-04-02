@@ -1,40 +1,61 @@
 {
-    "version": "0.2.0",
-    "configurations": [
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Train UNet",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/train.py",
+      "console": "externalTerminal",
+      "justMyCode": false,
+      "python": "${command:python.interpreterPath}",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "CUDA_VISIBLE_DEVICES": "0"
+      },
+      "args": [
+        "--batch-size",
+        "2",
+        "--epochs",
+        "1"
+      ]
+    },
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Python: 快速测试",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/test_simple.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [],
+      "stopAtEntry": false,
+      "externalConsole": true,
+      "cwd": "d:/04_Media/Downloads",
+      "program": "d:/04_Media/Downloads/build/Debug/outDebug",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
         {
-            "name": "Python: Train UNet",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/train.py",
-            "console": "externalTerminal",  // 改为外部终端，避免VSCode终端问题
-            "justMyCode": false,
-            "python": "${command:python.interpreterPath}",  // 使用VSCode选择的解释器
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}",
-                "CUDA_VISIBLE_DEVICES": "0"  // 如果使用GPU
-            },
-            "args": [
-                "--batch-size", "2",
-                "--epochs", "1"  // 调试时只训练1个epoch
-            ]
-        },
-        {
-            "name": "Python: Current File",
-            "type": "python",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal",
-            "justMyCode": true,
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "name": "Python: 快速测试",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/test_simple.py",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
         }
-    ]
+      ]
+    }
+  ]
 }

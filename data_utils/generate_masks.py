@@ -92,9 +92,9 @@ def process_folder(input_dir, image_output_dir, mask_output_dir):
 
 if __name__ == "__main__":
     # 设置路径（根据你的实际情况修改）
-    input_dir = r"img"
-    image_output_dir = r"img\\img"
-    mask_output_dir = r"img\\masks"
+    input_dir = r"E:\06_Temporary\bridge_poly_2"
+    image_output_dir = r"E:\06_Temporary\data_bridge_3\img"
+    mask_output_dir = r"E:\06_Temporary\data_bridge_3\masks"
     
     # 如果需要命令行参数，可以取消下面的注释
     # if len(sys.argv) != 4:

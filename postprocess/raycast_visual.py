@@ -10,9 +10,9 @@ from tqdm import tqdm # 推荐使用 tqdm 显示进度条，如果没有请 pip 
 # 📂 1. 路径配置 (请根据你的实际项目路径微调)
 # ==========================================
 project_root = r"E:\03_Learning\MachineLearning\unet-pytorch"
-pred_dir = os.path.join(project_root, "miou_out", "miou_unet_after", "detection-results")
+pred_dir = os.path.join(project_root, "miou_out", "miou_unet_dir_cbam", "detection-results")
 gt_dir = os.path.join(project_root, "VOCdevkit", "VOC2007", "SegmentationClass")
-output_dir = os.path.join(project_root, "healing_comparison_results")
+output_dir = os.path.join(project_root, "postprocess", "dir+CBAM+raycast")  # 修复后结果的输出文件夹
 
 # 如果输出文件夹不存在，则自动创建
 os.makedirs(output_dir, exist_ok=True)
@@ -527,38 +527,90 @@ def postprocess_rope_mask(mask, close_ksize=3, min_area=50):
 
     return final_mask
 
-# 获取所有预测结果的图片路径
-pred_paths = glob.glob(os.path.join(pred_dir, "*.png"))
+import os
+import glob
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+from skimage.morphology import skeletonize
 
+# ==========================================
+# 新增：多维评估指标计算核心函数
+# ==========================================
+def compute_metrics(pred_mask, gt_mask):
+    """
+    计算二值分割的 IoU, Precision, Recall
+    处理了 VOC 数据集常见的 255 白边忽略区域
+    """
+    valid_mask = (gt_mask != 255)
+    pred_valid = (pred_mask > 0)[valid_mask]
+    gt_valid   = (gt_mask > 0)[valid_mask]
+
+    TP = np.logical_and(pred_valid, gt_valid).sum()
+    FP = np.logical_and(pred_valid, ~gt_valid).sum()
+    FN = np.logical_and(~pred_valid, gt_valid).sum()
+
+    iou = TP / (TP + FP + FN) if (TP + FP + FN) > 0 else 0.0
+    precision = TP / (TP + FP) if (TP + FP) > 0 else 0.0
+    recall = TP / (TP + FN) if (TP + FN) > 0 else 0.0
+
+    return iou, precision, recall
+
+def compute_cldice_np(pred_mask, gt_mask):
+    """计算基于 numpy 和 skimage 的 CLDice"""
+    valid_mask = (gt_mask != 255)
+    pred_b = (pred_mask > 0) & valid_mask
+    gt_b   = (gt_mask > 0) & valid_mask
+
+    if pred_b.sum() == 0 and gt_b.sum() == 0: return 1.0
+    if pred_b.sum() == 0 or gt_b.sum() == 0: return 0.0
+
+    skel_pred = skeletonize(pred_b)
+    skel_gt   = skeletonize(gt_b)
+
+    tprec_num = np.logical_and(skel_pred, gt_b).sum()
+    tprec_den = skel_pred.sum()
+    tprec = tprec_num / tprec_den if tprec_den > 0 else 0.0
+
+    tsens_num = np.logical_and(skel_gt, pred_b).sum()
+    tsens_den = skel_gt.sum()
+    tsens = tsens_num / tsens_den if tsens_den > 0 else 0.0
+
+    if tprec + tsens == 0: return 0.0
+    return 2.0 * tprec * tsens / (tprec + tsens)
+
+# (保留你原来的 postprocess_rope_mask, zhang_suen_thinning_fast, ray_cast_midpoint_healing 函数...)
+
+# ==========================================
+# 📊 评估初始化 (4项指标，Before vs After)
+# ==========================================
+metrics_tracker = {
+    'before': {'iou': [], 'rec': [], 'pre': [], 'cld': []},
+    'after':  {'iou': [], 'rec': [], 'pre': [], 'cld': []}
+}
+processed_count = 0
+
+pred_paths = glob.glob(os.path.join(pred_dir, "*.png"))
 print(f"🚀 开始遍历评估，共找到 {len(pred_paths)} 张预测掩码...")
 
 # ==========================================
-# 🔄 3. 核心遍历循环
+# 🔄 核心遍历循环
 # ==========================================
 for pred_path in tqdm(pred_paths, desc="Processing Images"):
     base_name = os.path.basename(pred_path)
-    
-    # 构建对应的 GT 路径
     gt_path = os.path.join(gt_dir, base_name)
     
     if not os.path.exists(gt_path):
-        print(f"\n⚠️ 找不到对应的 GT 文件，跳过: {gt_path}")
         continue
 
-    # ----------------------------------------
     # [步骤 A] 读取预测图与 GT 图
-    # ----------------------------------------
     pred_img = cv2.imread(pred_path, cv2.IMREAD_GRAYSCALE)
     gt_img = cv2.imread(gt_path, cv2.IMREAD_GRAYSCALE)
-    
-    # 确保预测图转为标准的 0 和 1 二值化格式
     binary = (pred_img > 0).astype(np.uint8)
     
-    # ----------------------------------------
-    # [步骤 B] 提取并优化骨架 (复用你提供的逻辑)
-    # ----------------------------------------
+    # [步骤 B & C] 骨架提取、中心射线缝合、形态学后处理
     skeleton = zhang_suen_thinning_fast(binary)
-    
     kernel_9x9 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
     skeleton_closed = cv2.morphologyEx(skeleton, cv2.MORPH_CLOSE, kernel_9x9)
     skeleton = zhang_suen_thinning_fast(skeleton_closed)
@@ -569,81 +621,93 @@ for pred_path in tqdm(pred_paths, desc="Processing Images"):
     skeleton[:, :border_size] = 0  
     skeleton[:, -border_size:] = 0  
     
-    # ----------------------------------------
-    # [步骤 C] 执行透视中心射线缝合
-    # ----------------------------------------
-    # extend_ratio=0.1 即前后各伸长 1/5
     healed_mask = ray_cast_midpoint_healing(binary, skeleton, hit_threshold=1)
-    
     healed_mask = postprocess_rope_mask(healed_mask, close_ksize=3, min_area=50)
     
-    # ----------------------------------------
-    # [步骤 D] 计算 IoU
-    # ----------------------------------------
-    iou_b = calculate_iou(binary, gt_img)
-    iou_a = calculate_iou(healed_mask, gt_img)
+    cv2.imwrite(os.path.join("miou_out/miou_ours", f"{base_name}"), (healed_mask).astype(np.uint8))
     
-    iou_before_list.append(iou_b)
-    iou_after_list.append(iou_a)
+    # ----------------------------------------
+    # [步骤 D] 计算多项指标
+    # ----------------------------------------
+    iou_b, pre_b, rec_b = compute_metrics(binary, gt_img)
+    cld_b = compute_cldice_np(binary, gt_img)
+    
+    iou_a, pre_a, rec_a = compute_metrics(healed_mask, gt_img)
+    cld_a = compute_cldice_np(healed_mask, gt_img)
+    
+    # 记录数据
+    metrics_tracker['before']['iou'].append(iou_b); metrics_tracker['after']['iou'].append(iou_a)
+    metrics_tracker['before']['pre'].append(pre_b); metrics_tracker['after']['pre'].append(pre_a)
+    metrics_tracker['before']['rec'].append(rec_b); metrics_tracker['after']['rec'].append(rec_a)
+    metrics_tracker['before']['cld'].append(cld_b); metrics_tracker['after']['cld'].append(cld_a)
+    
     processed_count += 1
     
-    if iou_b - iou_a > 0.001:
-        print(f"\n⚠️ 注意！{base_name} 的 IoU 从 {iou_b:.4f} 下降到 {iou_a:.4f}，可能是过度修复了。")
-    
+    # 💡 亮点功能：筛选提升显著的图片！
+    # 如果 CLDice 提升超过 2%，或者 Recall 提升超过 2%，说明连上了大段断裂！
+    if (cld_a - cld_b) > 0.02 or (rec_a - rec_b) > 0.02:
+        tqdm.write(f"🌟 显著修复发现! {base_name} | CLDice提升: +{(cld_a-cld_b)*100:.1f}% | Recall提升: +{(rec_a-rec_b)*100:.1f}%")
+    elif (iou_b - iou_a) > 0.01:
+        # 如果 IoU 反而掉了 1% 以上，说明可能过度延伸误伤了背景，记录下来排查
+        tqdm.write(f"⚠️ 可能过度修复! {base_name} | IoU下降: -{(iou_b-iou_a)*100:.1f}%")
+
     # ----------------------------------------
-    # [步骤 E] 绘制并保存三联对比图
+    # [步骤 E] 绘制并保存三联对比图 (保持原样)
     # ----------------------------------------
-    # 设置大尺寸画布
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-    fig.suptitle(f"Image: {base_name} | IoU Before: {iou_b:.4f} -> IoU After: {iou_a:.4f}", fontsize=16)
+    fig.suptitle(f"{base_name} | CLDice: {cld_b:.4f} -> {cld_a:.4f} | IoU: {iou_b:.4f} -> {iou_a:.4f}", fontsize=16)
     
-    # 图 1：原始预测
     axes[0].imshow(binary, cmap='gray')
-    axes[0].set_title(f'Original Prediction\nIoU: {iou_b:.4f}', fontsize=14)
+    axes[0].set_title(f'Original Prediction\nCLDice: {cld_b:.4f}', fontsize=14)
     axes[0].axis('off')
     
-    # 图 2：修复后预测
-    # 稍微做个彩色可视化，把修复的区域用红色标出来
     diff = healed_mask - binary
     show_healed = np.zeros((binary.shape[0], binary.shape[1], 3), dtype=np.uint8)
-    show_healed[binary > 0] = [200, 200, 200]  # 原有的线画成浅灰
-    show_healed[diff > 0] = [255, 0, 0]        # 新缝合的线画成红色
+    show_healed[binary > 0] = [200, 200, 200]
+    show_healed[diff > 0] = [255, 0, 0] 
     
     axes[1].imshow(show_healed)
-    axes[1].set_title(f'Healed Prediction\nIoU: {iou_a:.4f}', fontsize=14)
+    axes[1].set_title(f'Healed Prediction\nCLDice: {cld_a:.4f}', fontsize=14)
     axes[1].axis('off')
     
-    # 图 3：Ground Truth
     axes[2].imshow(gt_img, cmap='gray')
     axes[2].set_title('Ground Truth', fontsize=14)
     axes[2].axis('off')
     
     plt.tight_layout()
-    
-    # 保存图片并关闭画布释放内存
     save_path = os.path.join(output_dir, f"cmp_{base_name}")
     plt.savefig(save_path, bbox_inches='tight', dpi=150)
     plt.close(fig)
 
 # ==========================================
-# 📈 4. 输出最终统计结果
+# 📈 4. 输出最终统计大表盘
 # ==========================================
 if processed_count > 0:
-    miou_before = np.mean(iou_before_list)
-    miou_after = np.mean(iou_after_list)
+    def avg(lst): return np.mean(lst) * 100
+
+    print("\n" + "="*65)
+    print(f"🎉 后处理管道评估完成！共处理 {processed_count} 张图片。")
+    print("="*65)
+    print(f"{'Metric':<15} | {'Before (Raw)':<15} | {'After (Healed)':<15} | {'Change'}")
+    print("-" * 65)
     
-    print("\n" + "="*40)
-    print("🎉 全数据集评估完成！")
-    print(f"📁 对比图已保存至: {output_dir}")
-    print("-" * 40)
-    print(f"📊 原始 mIoU (Before) : {miou_before:.4f}")
-    print(f"📊 修复后 mIoU (After)  : {miou_after:.4f}")
-    
-    improvement = (miou_after - miou_before) * 100
-    if improvement > 0:
-        print(f"✨ 整体表现提升了 {improvement:.2f}%！算法非常有效！")
-    else:
-        print(f"⚠️ 整体表现下降了 {abs(improvement):.2f}%，可能需要调小 extend_ratio。")
-    print("="*40)
+    # 提取平均值
+    b_iou = avg(metrics_tracker['before']['iou']); a_iou = avg(metrics_tracker['after']['iou'])
+    b_rec = avg(metrics_tracker['before']['rec']); a_rec = avg(metrics_tracker['after']['rec'])
+    b_pre = avg(metrics_tracker['before']['pre']); a_pre = avg(metrics_tracker['after']['pre'])
+    b_cld = avg(metrics_tracker['before']['cld']); a_cld = avg(metrics_tracker['after']['cld'])
+
+    metrics_names = ["Foreground IoU", "Recall", "Precision", "CLDice"]
+    b_vals = [b_iou, b_rec, b_pre, b_cld]
+    a_vals = [a_iou, a_rec, a_pre, a_cld]
+
+    for name, b_val, a_val in zip(metrics_names, b_vals, a_vals):
+        diff = a_val - b_val
+        sign = "+" if diff > 0 else ""
+        print(f"{name:<15} | {b_val:>6.2f}%{' ':>8} | {a_val:>6.2f}%{' ':>8} | {sign}{diff:.2f}%")
+        
+    print("="*65)
+    print(f"📁 详细对比组图已保存至: {output_dir}")
+    print("💡 提示：重点查看上方打印出 '🌟 显著修复发现!' 的图片，那将是极佳的论文展示图！")
 else:
     print("❌ 没有找到任何可处理的图片，请检查路径。")

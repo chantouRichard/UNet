@@ -152,3 +152,7 @@ test_JPEG_out/
 Vessel_result/
 test/
 healing_comparison_results/
+postprocess/
+tradeoff_analysis_visuals/
+comparison_results/
+comparison_results2/
